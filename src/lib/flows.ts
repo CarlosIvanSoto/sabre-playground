@@ -26,7 +26,7 @@ export const FLOWS: Flow[] = [
     title: "Autenticación",
     description:
       "Pedir el token (v3 o v2), ver su vencimiento y refresco, y forzar un 401.",
-    methods: ["automático (AuthManager)"],
+    methods: ["automático (AuthManager)", "booking.get"],
     wiki: "wiki/proyectos/sabre-client/decisiones/renovacion-token-oauth.md",
     phase: 2,
   },
