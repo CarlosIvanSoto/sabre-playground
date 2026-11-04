@@ -1,8 +1,12 @@
 "use server"
 
-import { buildRevalidateItineraryRequest } from "sabre-client"
+import {
+  buildRevalidateItineraryRequest,
+  buildSeatAvailabilityRequest,
+} from "sabre-client"
 import {
   type ChosenItinerary,
+  chosenItinerarySchema,
   revalidateSchema,
   searchSchema,
 } from "@/lib/air-booking"
@@ -74,6 +78,32 @@ export async function revalidateItinerary(
           buildRevalidateItineraryRequest({ search, ...chosen }),
           options
         )
+      ),
+    }
+  })
+}
+
+/**
+ * Paso 3, opcional (F3.3, #14): `buildSeatAvailabilityRequest` y `air.getSeats` por payload
+ * (`byReservationPayload`), con el itinerario revalidado. Es una lectura.
+ *
+ * En CERT el mapa no es confiable: todos los asientos llegan `F` (Q-071), y uno libre en el
+ * mapa puede estar ocupado en el host. Por eso el paso es opcional.
+ */
+export async function getSeatsForItinerary(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const parsed = chosenItinerarySchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    const sabre = getSabre(id)
+    if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
+    const chosen = parsed.data as typeof parsed.data & ChosenItinerary
+    return {
+      enabled: true,
+      step: await runStep((options) =>
+        sabre.client.air.getSeats(buildSeatAvailabilityRequest(chosen), options)
       ),
     }
   })
