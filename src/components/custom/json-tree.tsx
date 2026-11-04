@@ -1,30 +1,34 @@
 "use client"
 
 import { cn } from "cn"
-import { ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide-react"
+import {
+  ChevronRight,
+  ChevronsDownUpIcon,
+  ChevronsUpDownIcon,
+  FileJsonIcon,
+} from "lucide-react"
 import { useState } from "react"
+import { DownloadButton } from "@/components/custom/download-button"
 import { Button } from "@/components/ui/button"
 import {
   CodeBlock,
   CodeBlockActions,
   CodeBlockContent,
   CodeBlockCopyButton,
+  CodeBlockHeader,
+  CodeBlockTitle,
 } from "@/components/ui/code-block"
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 
 /**
- * Árbol JSON colapsable por nivel, sobre el `CodeBlock` de shadcn: el mismo marco, tamaño y
- * botón de copiar (que copia el JSON completo con sangría). Cada objeto o arreglo es un
- * `Collapsible` de Base UI. Va en `custom/` porque shadcn no trae un visor JSON (ADR-023).
+ * Árbol JSON colapsable por nivel, sobre el `CodeBlock` de shadcn. La barra es un
+ * `CodeBlockHeader` con el nombre del archivo y las acciones: expandir o colapsar todo,
+ * descargar y copiar. Cada objeto o arreglo es un `Collapsible` de Base UI. Va en `custom/`
+ * porque shadcn no trae un visor JSON (ADR-023).
  *
  * Recibe datos planos (lo que pasa por `JSON.stringify`). Dentro de `<code>` todo es `span`.
  */
@@ -34,21 +38,53 @@ type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 interface JsonTreeProps
   extends Omit<React.ComponentProps<typeof CodeBlock>, "children"> {
   value: unknown
+  /** Nombre del archivo: se muestra en la barra y es el de la descarga. */
+  filename: string
+  /** Texto que se copia y se descarga. Por defecto, `value` como JSON con sangría. */
+  source?: string
   /** Niveles abiertos al inicio. Por defecto 2. */
   defaultDepth?: number
+  /** Acciones extra, antes de las de expandir, descargar y copiar. */
+  actions?: React.ReactNode
+}
+
+/** Niveles de objetos y arreglos con contenido: 0 para un primitivo o un `{}`. */
+function branchDepth(value: Json): number {
+  if (value === null || typeof value !== "object") return 0
+  const children = Object.values(value)
+  if (children.length === 0) return 0
+  return 1 + Math.max(...children.map(branchDepth))
 }
 
 function JsonTree({
   value,
+  filename,
+  source,
   defaultDepth = 2,
+  actions,
   className,
   ...props
 }: JsonTreeProps) {
-  // Expandir o colapsar todo vuelve a montar el árbol con otra profundidad inicial: todo
-  // abierto, o todo cerrado (también la raíz, para que el cambio se vea en cualquier JSON).
-  const [depth, setDepth] = useState({ value: defaultDepth, version: 0 })
   const data = (value === undefined ? null : value) as Json
-  const expandable = data !== null && typeof data === "object"
+  const depth = branchDepth(data)
+  // Expandir o colapsar todo vuelve a montar el árbol con otra profundidad inicial. `expanded`
+  // dice si todo está abierto; abrir o cerrar un nodo a mano lo pasa a `false`, y el botón
+  // vuelve a ofrecer "Expandir todo".
+  const [tree, setTree] = useState({
+    openDepth: defaultDepth,
+    expanded: depth <= defaultDepth,
+    version: 0,
+  })
+  const text = source ?? JSON.stringify(data, null, 2)
+
+  const toggleAll = () =>
+    setTree((t) =>
+      t.expanded
+        ? { openDepth: 0, expanded: false, version: t.version + 1 }
+        : { openDepth: Infinity, expanded: true, version: t.version + 1 }
+    )
+  const onManualToggle = () =>
+    setTree((t) => (t.expanded ? { ...t, expanded: false } : t))
 
   return (
     <CodeBlock
@@ -57,68 +93,42 @@ function JsonTree({
       className={cn(className)}
       {...props}
     >
-      <CodeBlockActions>
-        {expandable && (
-          <>
-            <IconAction
-              label="Expandir todo"
-              onClick={() =>
-                setDepth((d) => ({ value: Infinity, version: d.version + 1 }))
-              }
+      <CodeBlockHeader>
+        <CodeBlockTitle>
+          <FileJsonIcon />
+          {filename}
+        </CodeBlockTitle>
+        <CodeBlockActions>
+          {actions}
+          {depth > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={tree.expanded ? "Colapsar todo" : "Expandir todo"}
+              onClick={toggleAll}
             >
-              <ChevronsUpDown />
-            </IconAction>
-            <IconAction
-              label="Colapsar todo"
-              onClick={() =>
-                setDepth((d) => ({ value: 0, version: d.version + 1 }))
-              }
-            >
-              <ChevronsDownUp />
-            </IconAction>
-          </>
-        )}
-        <CodeBlockCopyButton value={JSON.stringify(data, null, 2)} />
-      </CodeBlockActions>
+              {tree.expanded ? <ChevronsDownUpIcon /> : <ChevronsUpDownIcon />}
+            </Button>
+          )}
+          <DownloadButton
+            value={text}
+            filename={filename}
+            mediaType="application/json"
+          />
+          <CodeBlockCopyButton value={text} />
+        </CodeBlockActions>
+      </CodeBlockHeader>
       <CodeBlockContent wrap className="max-h-[32rem]">
         <JsonNode
-          key={depth.version}
+          key={tree.version}
           value={data}
           level={0}
-          openDepth={depth.value}
+          openDepth={tree.openDepth}
+          onToggle={onManualToggle}
           last
         />
       </CodeBlockContent>
     </CodeBlock>
-  )
-}
-
-/** Botón de ícono de la barra, con el mismo tamaño que el de copiar y su tooltip. */
-function IconAction({
-  label,
-  onClick,
-  children,
-}: {
-  label: string
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={label}
-            onClick={onClick}
-          />
-        }
-      >
-        {children}
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   )
 }
 
@@ -127,10 +137,19 @@ interface JsonNodeProps {
   name?: string
   level: number
   openDepth: number
+  /** Se llama cuando se abre o se cierra un nodo a mano. */
+  onToggle: () => void
   last: boolean
 }
 
-function JsonNode({ value, name, level, openDepth, last }: JsonNodeProps) {
+function JsonNode({
+  value,
+  name,
+  level,
+  openDepth,
+  onToggle,
+  last,
+}: JsonNodeProps) {
   const comma = last ? null : <Punct>,</Punct>
   const label =
     name === undefined ? null : (
@@ -182,6 +201,7 @@ function JsonNode({ value, name, level, openDepth, last }: JsonNodeProps) {
       brackets={[open, close]}
       comma={comma}
       defaultOpen={level < openDepth}
+      onToggle={onToggle}
     >
       {entries.map(([key, item], index) => (
         <JsonNode
@@ -190,6 +210,7 @@ function JsonNode({ value, name, level, openDepth, last }: JsonNodeProps) {
           value={item}
           level={level + 1}
           openDepth={openDepth}
+          onToggle={onToggle}
           last={index === entries.length - 1}
         />
       ))}
@@ -203,6 +224,7 @@ function JsonBranch({
   brackets: [open, close],
   comma,
   defaultOpen,
+  onToggle,
   children,
 }: {
   label: React.ReactNode
@@ -210,6 +232,7 @@ function JsonBranch({
   brackets: [string, string]
   comma: React.ReactNode
   defaultOpen: boolean
+  onToggle: () => void
   children: React.ReactNode
 }) {
   // Estado propio por nodo: con `group-data-[open]` un nodo cerrado heredaría el estilo del
@@ -219,7 +242,10 @@ function JsonBranch({
   return (
     <Collapsible
       open={expanded}
-      onOpenChange={setExpanded}
+      onOpenChange={(open) => {
+        setExpanded(open)
+        onToggle()
+      }}
       render={<span data-slot="json-tree-node" className="block" />}
     >
       <CollapsibleTrigger

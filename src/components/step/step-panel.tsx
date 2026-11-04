@@ -76,14 +76,22 @@ export function StepPanel({
       </Card>
       <Card className="min-w-0">
         <CardContent>
-          <StepOutput run={run} pending={pending} />
+          <StepOutput run={run} pending={pending} title={title} />
         </CardContent>
       </Card>
     </div>
   )
 }
 
-function StepOutput({ run, pending }: { run?: StepRun; pending: boolean }) {
+function StepOutput({
+  run,
+  pending,
+  title,
+}: {
+  run?: StepRun
+  pending: boolean
+  title: string
+}) {
   if (pending) {
     return (
       <Empty>
@@ -122,10 +130,12 @@ function StepOutput({ run, pending }: { run?: StepRun; pending: boolean }) {
       </Alert>
     )
   }
-  return <StepTabs step={run.step} />
+  // Base de los nombres de archivo: la operación del SDK, o el título del paso.
+  const name = fileBase(run.step.raw?.operation ?? title)
+  return <StepTabs step={run.step} name={name} />
 }
 
-function StepTabs({ step }: { step: StepResult }) {
+function StepTabs({ step, name }: { step: StepResult; name: string }) {
   const initial: Tab = step.ok ? "result" : "error"
   const [tab, setTab] = useState<Tab>(initial)
   // Con un paso nuevo se vuelve a la pestaña que le corresponde.
@@ -155,7 +165,7 @@ function StepTabs({ step }: { step: StepResult }) {
         </TabsList>
         <TabsContent value="result">
           {step.ok ? (
-            <Json value={step.result} />
+            <Json value={step.result} filename={`${name}.result.json`} />
           ) : (
             <Nothing>El SDK lanzó un error: no hay resultado.</Nothing>
           )}
@@ -167,21 +177,21 @@ function StepTabs({ step }: { step: StepResult }) {
               token.
             </Nothing>
           ) : (
-            <RawView raw={step.raw} />
+            <RawView raw={step.raw} name={name} />
           )}
         </TabsContent>
         <TabsContent value="error">
           {step.error === undefined ? (
             <Nothing>Sin error.</Nothing>
           ) : (
-            <ErrorView error={step.error} />
+            <ErrorView error={step.error} name={name} />
           )}
         </TabsContent>
         <TabsContent value="log">
           {step.log.length === 0 ? (
             <Nothing>El SDK no registró nada en esta llamada.</Nothing>
           ) : (
-            <LogView log={step.log} />
+            <LogView log={step.log} name={name} />
           )}
         </TabsContent>
       </Tabs>
@@ -212,7 +222,7 @@ function StepSummary({ step }: { step: StepResult }) {
   )
 }
 
-function RawView({ raw }: { raw: RawResponse }) {
+function RawView({ raw, name }: { raw: RawResponse; name: string }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -229,12 +239,16 @@ function RawView({ raw }: { raw: RawResponse }) {
       <Fields
         rows={Object.entries(raw.headers).map(([name, value]) => [name, value])}
       />
-      {raw.body === "" ? <Nothing>Body vacío.</Nothing> : <RawBody raw={raw} />}
+      {raw.body === "" ? (
+        <Nothing>Body vacío.</Nothing>
+      ) : (
+        <RawBody raw={raw} name={name} />
+      )}
     </div>
   )
 }
 
-function ErrorView({ error }: { error: StepError }) {
+function ErrorView({ error, name }: { error: StepError; name: string }) {
   const { warnings, errors, ...fields } = error
   return (
     <div className="flex flex-col gap-3">
@@ -246,12 +260,12 @@ function ErrorView({ error }: { error: StepError }) {
       />
       {warnings !== undefined && warnings.length > 0 && (
         <Section title="warnings">
-          <Json value={warnings} />
+          <Json value={warnings} filename={`${name}.error.warnings.json`} />
         </Section>
       )}
       {errors !== undefined && errors.length > 0 && (
         <Section title="errors">
-          <Json value={errors} />
+          <Json value={errors} filename={`${name}.error.errors.json`} />
         </Section>
       )}
     </div>
@@ -265,7 +279,7 @@ const LEVEL_VARIANT = {
   error: "destructive",
 } as const
 
-function LogView({ log }: { log: LogLine[] }) {
+function LogView({ log, name }: { log: LogLine[]; name: string }) {
   return (
     <Table>
       <TableHeader>
@@ -288,7 +302,12 @@ function LogView({ log }: { log: LogLine[] }) {
             </TableCell>
             <TableCell className="whitespace-normal">
               <div className="font-mono text-xs">{line.event}</div>
-              {line.context !== undefined && <Json value={line.context} />}
+              {line.context !== undefined && (
+                <Json
+                  value={line.context}
+                  filename={`${name}.log-${index + 1}.json`}
+                />
+              )}
             </TableCell>
           </TableRow>
         ))}
@@ -326,8 +345,16 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Datos planos como árbol colapsable. `undefined` (sin resultado) se ve como `null`. */
-function Json({ value }: { value: unknown }) {
-  return <JsonTree value={value} />
+function Json({ value, filename }: { value: unknown; filename: string }) {
+  return <JsonTree value={value} filename={filename} />
+}
+
+/**
+ * Base de un nombre de archivo: `booking.get`, `queue.count`… Lo que no sea letra, dígito,
+ * punto o guion pasa a `-` (`openSession + close` → `openSession-close`).
+ */
+function fileBase(text: string): string {
+  return text.replace(/[^A-Za-z0-9.-]+/g, "-").replace(/^-|-$/g, "")
 }
 
 function Nothing({ children }: { children: ReactNode }) {
