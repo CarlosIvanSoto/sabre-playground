@@ -1,11 +1,8 @@
 import "server-only"
 
-import {
-  SabreError,
-  type SabreRawResponse,
-  type SabreRawResponseCallback,
-} from "sabre-client"
+import type { SabreRawResponse, SabreRawResponseCallback } from "sabre-client"
 import type { LogLine, StepError, StepResult } from "@/lib/step/types"
+import { isSabreError } from "@/server/sabre/errors"
 import { captureLog } from "@/server/sabre/log"
 
 export type {
@@ -26,7 +23,7 @@ function toPlain<T>(value: T): T {
 }
 
 function serializeError(error: unknown): StepError {
-  if (error instanceof SabreError) {
+  if (isSabreError(error)) {
     // `toJSON` deja fuera `raw`, que no es enumerable y puede traer PII o credenciales.
     const { name: _name, ...fields } = toPlain(error.toJSON())
     return { ...fields, class: error.name, message: error.message }
