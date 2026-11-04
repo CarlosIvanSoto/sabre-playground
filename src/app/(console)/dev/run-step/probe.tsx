@@ -7,6 +7,11 @@ import { useStep } from "@/components/step/use-step"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import {
+  type BookingGetInput,
+  bookingGetSchema,
+  MISSING_LOCATOR,
+} from "@/lib/booking"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type { StepRun } from "@/lib/step/types"
 import {
@@ -15,11 +20,6 @@ import {
   openAndCloseSession,
   searchFlights,
 } from "./actions"
-import {
-  type BookingGetInput,
-  bookingGetSchema,
-  MISSING_LOCATOR,
-} from "./schema"
 
 export function BookingGetProbe() {
   const { run, pending, execute } = useStep("booking.get", getBooking)
