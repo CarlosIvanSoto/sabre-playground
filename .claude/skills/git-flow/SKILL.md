@@ -19,7 +19,8 @@ issue; siguen la vía corta de la sección 9.
   Nunca se usa como base ni recibe push durante la v2. Al cerrar #28, la base pasa a ser `main` y
   este skill se actualiza (sección 9).
 - **Repo:** `CarlosIvanSoto/sabre-playground` · **Milestone:** `v2`.
-- **Checks locales:** `npm run lint && npm run build` (el build de Next también hace el typecheck).
+- **Checks locales:** `pnpm lint && pnpm build` (`lint` es `biome check`; el build de Next también
+  hace el typecheck). La CI corre lo mismo (`pnpm biome ci` y `pnpm build`) en cada PR.
 - **Prohibido en commits y PR:** líneas `Co-Authored-By`, `Claude-Session`, "Generated with Claude"
   o cualquier atribución a IA.
 
@@ -120,12 +121,15 @@ EOF
 ## 4. Verificar antes de subir
 
 ```bash
-npm run lint && npm run build
+pnpm lint && pnpm build
 ```
+
+Si `pnpm lint` marca formato u orden de imports, `pnpm biome check --write` lo arregla; revisar
+el diff antes de commitear.
 
 Además, según la tarea:
 
-- **Flujos contra Sabre:** probar en CERT con `npm run dev` y anotar qué se corrió (sin datos de
+- **Flujos contra Sabre:** probar en CERT con `pnpm dev` y anotar qué se corrió (sin datos de
   pasajero).
 - **Modo fake:** probarlo sin `.env.local` cuando la tarea lo toque.
 - **Token:** buscar el token en el HTML y en el payload de las server actions no debe dar
@@ -194,7 +198,10 @@ Al terminar, devolver al usuario la URL del PR.
 
 Estrategia: **squash merge** → un commit por issue en `v2`, con el título del PR como mensaje.
 
+Antes del merge, esperar a que la CI termine en verde:
+
 ```bash
+gh pr checks <PR> --watch
 gh pr merge <PR> --squash --delete-branch
 git switch v2 && git pull --ff-only
 git branch -d <rama>               # si sigue existiendo en local
@@ -202,6 +209,12 @@ git branch -d <rama>               # si sigue existiendo en local
 
 Si la base avanzó mientras el PR estaba abierto: `git fetch origin && git rebase origin/v2`,
 repetir checks y `git push --force-with-lease`.
+
+**PR apilados** (una rama sale de la de otra tarea y su PR apunta a esa rama): al hacer squash
+merge del PR de abajo, GitHub cambia la base del de arriba a `v2`, pero la rama de arriba sigue
+teniendo los commits originales del de abajo. Hay que sacarlos:
+`git rebase --onto origin/v2 <rama-de-abajo> <rama-de-arriba>`, con `--update-refs` si hay más
+ramas encima, repetir checks y `git push --force-with-lease` (con confirmación del usuario).
 
 Después del merge:
 
@@ -223,8 +236,9 @@ necesitan issue.
 - `.github/ISSUE_TEMPLATE/` y `.github/pull_request_template.md`
 
 **Qué no entra**, aunque parezca tooling, porque afecta el build: `src/`, `public/`, `apartado/`,
-`package.json`, `package-lock.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`,
-`postcss.config.mjs`, `components.json` y `.github/workflows/`. Esos cambios llevan issue y siguen
+`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.json`, `next.config.ts`,
+`biome.json`, `postcss.config.mjs`, `components.json`, `skills-lock.json`, `.agents/` y
+`.github/workflows/`. Esos cambios llevan issue y siguen
 los pasos 1–8.
 
 **Cómo:**

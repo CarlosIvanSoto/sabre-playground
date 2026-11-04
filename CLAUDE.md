@@ -41,12 +41,23 @@ tipo `decisión`.
 
 ## Stack
 
-- Next.js 16 (App Router, server actions), React 19, Tailwind 4 y shadcn/ui.
+El stack base está fijado en el wiki: `wiki/proyectos/sabre-playground/decisiones/stack-base.md`
+(ADR-023).
+
+- Next.js 16.4 (App Router, server actions) con React Compiler, React 19.3, TypeScript 7 y
+  Tailwind 4.
+- Componentes: shadcn estilo `base-vega` sobre `@base-ui/react` (no Radix), íconos de
+  `lucide-react`. La skill `shadcn` para agentes vive en `.agents/skills/shadcn/`.
 - Formularios: `react-hook-form` + `zod` (un solo manejador).
+- Gestor de paquetes: **pnpm** (versión en `packageManager`). No usar npm ni `package-lock.json`.
+- Lint y formato: **Biome** (`biome.json`), sin ESLint. `src/components/ui/` entra al lint con
+  algunas reglas apagadas para el código de shadcn. Después de `pnpm dlx shadcn add`, correr
+  `pnpm format`: los componentes con íconos salen del CLI sin formatear.
+- CI: GitHub Actions (`.github/workflows/ci.yml`) corre `pnpm biome ci` y `pnpm build` en cada PR.
 - `apartado/v1/` guarda piezas de la v1 que se rescatan en la Fase 4 (sesión y colas).
   Está fuera del build y del lint; se borra cuando ya no quede nada por rescatar.
 
-Comandos: `npm run dev`, `npm run lint`, `npm run build`.
+Comandos: `pnpm dev`, `pnpm lint`, `pnpm format`, `pnpm build`.
 
 ## Seguimiento
 
