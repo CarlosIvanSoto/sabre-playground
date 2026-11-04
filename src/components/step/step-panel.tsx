@@ -12,6 +12,12 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockContent,
+  CodeBlockCopyButton,
+} from "@/components/ui/code-block"
+import {
   Empty,
   EmptyDescription,
   EmptyHeader,
@@ -230,7 +236,7 @@ function RawView({ raw }: { raw: RawResponse }) {
       {raw.body === "" ? (
         <Nothing>Body vacío.</Nothing>
       ) : (
-        <Code>{raw.body}</Code>
+        <Code text={raw.body} />
       )}
     </div>
   )
@@ -330,17 +336,23 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** JSON con sangría. El visor colapsable llega con F1.2 (#6). */
 function Json({ value }: { value: unknown }) {
   return (
-    <Code>
-      {value === undefined ? "undefined" : JSON.stringify(value, null, 2)}
-    </Code>
+    <Code
+      text={value === undefined ? "undefined" : JSON.stringify(value, null, 2)}
+    />
   )
 }
 
-function Code({ children }: { children: ReactNode }) {
+/** Texto tal cual (body, JSON), con botón de copiar. */
+function Code({ text }: { text: string }) {
   return (
-    <pre className="bg-muted max-h-[32rem] overflow-auto rounded-md p-3 font-mono text-xs">
-      {children}
-    </pre>
+    <CodeBlock size="sm">
+      <CodeBlockActions>
+        <CodeBlockCopyButton value={text} />
+      </CodeBlockActions>
+      <CodeBlockContent wrap className="max-h-[32rem]">
+        {text}
+      </CodeBlockContent>
+    </CodeBlock>
   )
 }
 

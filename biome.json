@@ -31,11 +31,16 @@
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "overrides": [
     {
-      "includes": ["src/components/ui/**"],
+      "includes": [
+        "src/components/ui/**",
+        "src/hooks/use-highlighted-code.ts",
+        "src/lib/highlighter.tsx"
+      ],
       "linter": {
         "rules": {
           "a11y": {
             "noLabelWithoutControl": "off",
+            "noNoninteractiveTabindex": "off",
             "useSemanticElements": "off"
           },
           "style": { "useImportType": "off" },
