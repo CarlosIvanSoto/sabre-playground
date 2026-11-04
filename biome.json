@@ -43,8 +43,13 @@
             "noNoninteractiveTabindex": "off",
             "useSemanticElements": "off"
           },
+          "correctness": { "useExhaustiveDependencies": "off" },
           "style": { "useImportType": "off" },
-          "suspicious": { "noArrayIndexKey": "off", "noDoubleEquals": "off" }
+          "suspicious": {
+            "noArrayIndexKey": "off",
+            "noDocumentCookie": "off",
+            "noDoubleEquals": "off"
+          }
         }
       },
       "assist": { "actions": { "source": { "organizeImports": "off" } } }
