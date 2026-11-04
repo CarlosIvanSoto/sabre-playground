@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [v2, main]
+  push:
+    branches: [v2]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: biome y build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # La versión de pnpm sale de packageManager en package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm biome ci
+
+      # Sin secretos: la app arranca sin credenciales de Sabre.
+      - run: pnpm build

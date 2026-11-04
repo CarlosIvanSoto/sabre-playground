@@ -16,8 +16,9 @@ Closes #
 
 ## Cómo se probó
 
-- [ ] `npm run lint`
-- [ ] `npm run build`
+- [ ] `pnpm lint`
+- [ ] `pnpm build`
+- [ ] CI en verde (`gh pr checks`)
 - [ ] Prueba manual en CERT / en modo fake (decir cuál y qué se corrió, sin datos de pasajero)
 
 ## Definición de terminado
