@@ -7,6 +7,11 @@ import {
   type SabreEnvironment,
 } from "sabre-client"
 import { z } from "zod"
+import {
+  type ConsoleEnvironmentId,
+  ENVIRONMENT_IDS,
+  type EnvironmentOption,
+} from "@/lib/environment"
 
 /**
  * Configuración por entorno, leída de `process.env` (`.env.local`).
@@ -27,7 +32,8 @@ export type EnvironmentId = "cert" | "prod"
 export const DEFAULT_ENVIRONMENT: EnvironmentId = "cert"
 
 export type CredentialsConfig =
-  | { enabled: true; config: SabreConfig }
+  /** `pcc`: el del EPR, para los requests que lo piden en el body (el `POS` de BFM). */
+  | { enabled: true; config: SabreConfig; pcc: string }
   | { enabled: false; reason: string }
 
 export interface EnvironmentConfig {
@@ -40,12 +46,8 @@ export interface EnvironmentConfig {
 }
 
 /** Lo que puede ver el cliente: sin credenciales ni valores de variables. */
-export interface EnvironmentSummary {
+export interface EnvironmentSummary extends EnvironmentOption {
   id: EnvironmentId
-  label: string
-  readOnly: boolean
-  enabled: boolean
-  reason?: string
 }
 
 type Env = Record<string, string | undefined>
@@ -188,7 +190,7 @@ function credentialsConfig(
             authVersion: "v3",
             credentials: buildCredentials(options),
           }
-    return { enabled: true, config }
+    return { enabled: true, config, pcc: v.PCC.toUpperCase() }
   } catch (error) {
     // `buildCredentials` valida sin red y sus mensajes no repiten secretos.
     if (error instanceof TypeError) {
@@ -242,4 +244,35 @@ export function getEnvironmentSummary(): EnvironmentSummary[] {
       ? { enabled: true }
       : { enabled: false, reason: sabre.reason }),
   }))
+}
+
+const FAKE_OPTION: EnvironmentOption = {
+  id: "fake",
+  label: "Fake",
+  readOnly: false,
+  enabled: true,
+}
+
+/** Los entornos del selector: CERT, producción si está habilitada, y fake. */
+export function getConsoleEnvironments(): EnvironmentOption[] {
+  return [...getEnvironmentSummary(), FAKE_OPTION]
+}
+
+/**
+ * Valida el entorno que llega a una server action (son endpoints públicos). Devuelve el id si
+ * existe y está habilitado, o la razón por la que no se puede usar.
+ */
+export function resolveEnvironment(
+  input: unknown
+): { ok: true; id: ConsoleEnvironmentId } | { ok: false; reason: string } {
+  const parsed = z.enum(ENVIRONMENT_IDS).safeParse(input)
+  if (!parsed.success) return { ok: false, reason: "entorno desconocido" }
+  const option = getConsoleEnvironments().find((e) => e.id === parsed.data)
+  if (option === undefined) {
+    return { ok: false, reason: `entorno ${parsed.data} no habilitado` }
+  }
+  if (!option.enabled) {
+    return { ok: false, reason: option.reason ?? "entorno deshabilitado" }
+  }
+  return { ok: true, id: parsed.data }
 }
