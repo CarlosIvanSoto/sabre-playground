@@ -8,14 +8,9 @@ export async function register() {
   const { getEnvironmentSummary } = await import("@/server/config/environments")
   for (const environment of getEnvironmentSummary()) {
     const mode = environment.readOnly ? " (solo lectura)" : ""
-    for (const api of ["rest", "soap"] as const) {
-      const state = environment[api]
-      const detail = state.enabled
-        ? "habilitado"
-        : `deshabilitado: ${state.reason}`
-      console.info(
-        `[sabre-playground] ${environment.label}${mode} ${api.toUpperCase()}: ${detail}`
-      )
-    }
+    const detail = environment.enabled
+      ? "habilitado (REST y SOAP)"
+      : `deshabilitado: ${environment.reason}`
+    console.info(`[sabre-playground] ${environment.label}${mode}: ${detail}`)
   }
 }

@@ -2,7 +2,6 @@ import "server-only"
 
 import { Sabre, type SabreConfig, SabreLegacy } from "sabre-client"
 import {
-  type Api,
   DEFAULT_ENVIRONMENT,
   type EnvironmentId,
   getEnvironment,
@@ -12,6 +11,7 @@ import { sabreLogger } from "@/server/sabre/log"
 /**
  * Clientes de `sabre-client`, uno por entorno y por API, creados la primera vez que se piden.
  *
+ * - Los dos clientes de un entorno usan el mismo `SabreConfig` (un solo juego de credenciales).
  * - El token vive en la caché en memoria de cada instancia, así que se reutiliza entre
  *   llamadas. No hay estado atado a un usuario ni a una cookie: el cliente sale solo del
  *   entorno (el error de la v1 en `src/lib/sabre/client.ts`).
@@ -38,7 +38,6 @@ const clients = store[KEY]
 function create<T>(
   cache: Map<EnvironmentId, ClientResult<T>>,
   id: EnvironmentId,
-  api: Api,
   build: (config: SabreConfig) => T
 ): ClientResult<T> {
   const cached = cache.get(id)
@@ -48,11 +47,11 @@ function create<T>(
   let result: ClientResult<T>
   if (environment === undefined) {
     result = { enabled: false, reason: `entorno ${id} no habilitado` }
-  } else if (!environment[api].enabled) {
-    result = { enabled: false, reason: environment[api].reason }
+  } else if (!environment.sabre.enabled) {
+    result = { enabled: false, reason: environment.sabre.reason }
   } else {
     try {
-      const config = environment[api].config
+      const config = environment.sabre.config
       result = {
         enabled: true,
         client: build({ ...config, logger: sabreLogger }),
@@ -73,12 +72,12 @@ function create<T>(
 export function getSabre(
   id: EnvironmentId = DEFAULT_ENVIRONMENT
 ): ClientResult<Sabre> {
-  return create(clients.rest, id, "rest", (config) => new Sabre(config))
+  return create(clients.rest, id, (config) => new Sabre(config))
 }
 
 /** Cliente SOAP (`SabreLegacy`) del entorno. */
 export function getSabreLegacy(
   id: EnvironmentId = DEFAULT_ENVIRONMENT
 ): ClientResult<SabreLegacy> {
-  return create(clients.soap, id, "soap", (config) => new SabreLegacy(config))
+  return create(clients.soap, id, (config) => new SabreLegacy(config))
 }

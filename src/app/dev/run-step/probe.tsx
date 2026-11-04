@@ -2,10 +2,10 @@
 
 import { useState, useTransition } from "react"
 import { Button } from "@/components/ui/button"
-import { probeToken, type TokenProbe } from "./actions"
+import { type ProbeResult, probeEnvironment } from "./actions"
 
 export function Probe() {
-  const [probe, setProbe] = useState<TokenProbe>()
+  const [probe, setProbe] = useState<ProbeResult>()
   const [pending, startTransition] = useTransition()
 
   return (
@@ -14,11 +14,11 @@ export function Probe() {
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
-            setProbe(await probeToken())
+            setProbe(await probeEnvironment())
           })
         }
       >
-        {pending ? "Llamando…" : "Correr booking.get"}
+        {pending ? "Llamando…" : "Correr la prueba"}
       </Button>
       {probe !== undefined && (
         <pre className="bg-muted overflow-auto rounded-md p-4 text-xs">
