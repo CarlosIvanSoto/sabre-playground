@@ -14,14 +14,14 @@ import {
   getEnvironment,
 } from "@/server/config/environments"
 import { sabreLogger } from "@/server/sabre/log"
-import { fileTokenStore } from "@/server/sabre/token-store"
+import { tracedTokenStore } from "@/server/sabre/token-store"
 
 /**
  * Clientes de `sabre-client`, uno por entorno y por API, creados la primera vez que se piden.
  *
  * - Los dos clientes de un entorno usan el mismo `SabreConfig` (un solo juego de credenciales).
  * - El token vive en la caché en memoria de cada instancia y en `.sabre-token.json`
- *   (`fileTokenStore`), así que se reutiliza entre llamadas y entre reinicios.
+ *   (`tracedTokenStore`), así que se reutiliza entre llamadas y entre reinicios.
  * - No hay estado atado a un usuario ni a una cookie: el cliente sale solo del entorno (el
  *   error de la v1 en `src/lib/sabre/client.ts`).
  * - Los clientes y su token nunca salen del servidor.
@@ -70,7 +70,7 @@ function create<T>(
         client: build({
           ...config,
           logger: sabreLogger,
-          tokenStore: fileTokenStore,
+          tokenStore: tracedTokenStore(id),
         }),
       }
     } catch (error) {
@@ -121,6 +121,15 @@ export function getSabre(
 ): ClientResult<Sabre> {
   if (id === "fake") return { enabled: false, reason: FAKE_REST_REASON }
   return create(clients.rest, id, (config) => new Sabre(config))
+}
+
+/**
+ * Descarta el cliente REST del entorno, con su token en memoria. El SDK no tiene API para
+ * invalidar el token (Q-079): la siguiente llamada crea otro `Sabre`, que busca el token en
+ * el store. `SabreLegacy` no usa OAuth, así que no se toca.
+ */
+export function resetSabre(id: EnvironmentId): void {
+  clients.rest.delete(id)
 }
 
 /** Cliente SOAP (`SabreLegacy`) del entorno. */
