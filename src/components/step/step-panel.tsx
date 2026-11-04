@@ -53,6 +53,11 @@ export interface StepPanelProps {
   run?: StepRun
   /** La llamada está en vuelo. */
   pending?: boolean
+  /**
+   * Vista propia del resultado, sobre el JSON de la pestaña Resultado (p. ej. el mapa de
+   * asientos). Recibe el resultado tal cual llegó.
+   */
+  resultView?: (result: unknown) => ReactNode
 }
 
 /**
@@ -65,6 +70,7 @@ export function StepPanel({
   form,
   run,
   pending = false,
+  resultView,
 }: StepPanelProps) {
   return (
     <div
@@ -82,7 +88,12 @@ export function StepPanel({
       </Card>
       <Card className="min-w-0">
         <CardContent>
-          <StepOutput run={run} pending={pending} title={title} />
+          <StepOutput
+            run={run}
+            pending={pending}
+            title={title}
+            resultView={resultView}
+          />
         </CardContent>
       </Card>
     </div>
@@ -93,10 +104,12 @@ function StepOutput({
   run,
   pending,
   title,
+  resultView,
 }: {
   run?: StepRun
   pending: boolean
   title: string
+  resultView?: (result: unknown) => ReactNode
 }) {
   if (pending) {
     return (
@@ -143,18 +156,31 @@ function StepOutput({
   }
   // Base de los nombres de archivo: la operación del SDK, o el título del paso.
   const name = fileBase(run.step.raw?.operation ?? title)
-  return <StepTabs step={run.step} name={name} environment={run.environment} />
+  return (
+    <StepTabs
+      step={run.step}
+      name={name}
+      environment={run.environment}
+      resultView={resultView}
+    />
+  )
 }
 
 function StepTabs({
   step,
   name,
   environment,
+  resultView,
 }: {
   step: StepResult
   name: string
   environment?: ConsoleEnvironmentId
+  resultView?: (result: unknown) => ReactNode
 }) {
+  const issues =
+    (step.error === undefined ? 0 : 1) +
+    (step.warnings?.length ?? 0) +
+    (step.partialErrors?.length ?? 0)
   const initial: Tab = step.ok ? "result" : "error"
   const [tab, setTab] = useState<Tab>(initial)
   // Con un paso nuevo se vuelve a la pestaña que le corresponde.
@@ -173,7 +199,13 @@ function StepTabs({
           <TabsTrigger value="raw">Crudo</TabsTrigger>
           <TabsTrigger value="error">
             Error
-            {step.error !== undefined && <Badge variant="destructive">1</Badge>}
+            {issues > 0 && (
+              <Badge
+                variant={step.error === undefined ? "secondary" : "destructive"}
+              >
+                {issues}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="log">
             Log
@@ -184,7 +216,10 @@ function StepTabs({
         </TabsList>
         <TabsContent value="result">
           {step.ok ? (
-            <Json value={step.result} filename={`${name}.result.json`} />
+            <div className="flex flex-col gap-3">
+              {resultView?.(step.result)}
+              <Json value={step.result} filename={`${name}.result.json`} />
+            </div>
           ) : (
             <Nothing>El SDK lanzó un error: no hay resultado.</Nothing>
           )}
@@ -200,10 +235,30 @@ function StepTabs({
           )}
         </TabsContent>
         <TabsContent value="error">
-          {step.error === undefined ? (
-            <Nothing>Sin error.</Nothing>
+          {issues === 0 ? (
+            <Nothing>Sin error ni avisos.</Nothing>
           ) : (
-            <ErrorView error={step.error} name={name} />
+            <div className="flex flex-col gap-4">
+              {step.error !== undefined && (
+                <ErrorView error={step.error} name={name} />
+              )}
+              {step.warnings !== undefined && (
+                <Section title="warnings del resultado">
+                  <Json
+                    value={step.warnings}
+                    filename={`${name}.warnings.json`}
+                  />
+                </Section>
+              )}
+              {step.partialErrors !== undefined && (
+                <Section title="errors del resultado (la llamada no lanzó)">
+                  <Json
+                    value={step.partialErrors}
+                    filename={`${name}.errors.json`}
+                  />
+                </Section>
+              )}
+            </div>
           )}
         </TabsContent>
         <TabsContent value="log">
