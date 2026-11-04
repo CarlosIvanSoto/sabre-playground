@@ -151,3 +151,51 @@ export function summarizeItinerary(
     validatingCarrier: fare?.validatingCarrierCode,
   }
 }
+
+/**
+ * Forma mínima de un itinerario que llega a una server action desde el cliente. No valida todo
+ * el modelo: lo que falte lo rechazan los builders del SDK con `TypeError`, que se ve en la
+ * pestaña Error.
+ */
+const itinerarySchema = z.looseObject({
+  id: z.number(),
+  legs: z.array(z.looseObject({ schedules: z.array(z.looseObject({})) })),
+  pricingInformation: z.array(z.looseObject({ fare: z.looseObject({}) })),
+})
+
+export const chosenItinerarySchema = z.object({
+  group: z.looseObject({
+    groupDescription: z.looseObject({
+      legDescriptions: z.array(z.looseObject({})),
+    }),
+    itineraries: z.array(itinerarySchema),
+  }),
+  itinerary: itinerarySchema,
+})
+
+/** Entrada de Revalidate (F3.2): la búsqueda que produjo el itinerario y el itinerario. */
+export const revalidateSchema = chosenItinerarySchema.extend({
+  query: searchSchema,
+})
+
+export interface RevalidateInput extends ChosenItinerary {
+  query: SearchQuery
+}
+
+/**
+ * El itinerario revalidado: el que Sabre marca `currentItinerary`, o el primero. Revalidate
+ * responde con el mismo modelo que BFM (`modelo-de-itinerario` en el wiki).
+ */
+export function revalidatedItinerary(
+  result: unknown
+): ChosenItinerary | undefined {
+  const groups = (result as { itineraryGroups?: ItineraryGroup[] } | undefined)
+    ?.itineraryGroups
+  for (const group of groups ?? []) {
+    const itinerary =
+      group.itineraries.find((i) => i.currentItinerary === true) ??
+      group.itineraries[0]
+    if (itinerary !== undefined) return chooseItinerary(group, itinerary)
+  }
+  return undefined
+}

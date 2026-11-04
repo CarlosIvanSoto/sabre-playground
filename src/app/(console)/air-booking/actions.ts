@@ -1,6 +1,11 @@
 "use server"
 
-import { searchSchema } from "@/lib/air-booking"
+import { buildRevalidateItineraryRequest } from "sabre-client"
+import {
+  type ChosenItinerary,
+  revalidateSchema,
+  searchSchema,
+} from "@/lib/air-booking"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type { StepRun } from "@/lib/step/types"
 import { getEnvironment } from "@/server/config/environments"
@@ -37,6 +42,38 @@ export async function searchFlights(
       enabled: true,
       step: await runStep((options) =>
         sabre.client.air.bargainFinderMax(request, options)
+      ),
+    }
+  })
+}
+
+/**
+ * Paso 2 (F3.2, #13): `buildRevalidateItineraryRequest` y `air.revalidateItinerary`, desde el
+ * itinerario elegido en el paso 1. El request de BFM se vuelve a armar acá con la misma
+ * búsqueda, para no recibir el PCC del cliente. El builder corre dentro de `runStep`: si el
+ * itinerario no le sirve, su `TypeError` se ve en la pestaña Error. Es una lectura.
+ */
+export async function revalidateItinerary(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const parsed = revalidateSchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    const sabre = getSabre(id)
+    if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
+    const pcc = posPcc(id)
+    if (pcc === undefined) return { enabled: false, reason: "falta el PCC" }
+    const { query, ...chosen } = parsed.data as typeof parsed.data &
+      ChosenItinerary
+    const search = buildSearchRequest(query, pcc)
+    return {
+      enabled: true,
+      step: await runStep((options) =>
+        sabre.client.air.revalidateItinerary(
+          buildRevalidateItineraryRequest({ search, ...chosen }),
+          options
+        )
       ),
     }
   })
