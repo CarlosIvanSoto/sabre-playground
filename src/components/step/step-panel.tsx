@@ -3,6 +3,7 @@
 import { CircleAlert, Play } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { JsonTree } from "@/components/custom/json-tree"
+import { EnvironmentBadge } from "@/components/environment/environment-badge"
 import { RawBody } from "@/components/step/raw-body"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type {
   LogLine,
   RawResponse,
@@ -64,7 +66,10 @@ export function StepPanel({
   pending = false,
 }: StepPanelProps) {
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    <div
+      data-slot="step-panel"
+      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"
+    >
       <Card>
         <CardHeader>
           <CardTitle className="font-mono">{title}</CardTitle>
@@ -125,17 +130,30 @@ function StepOutput({
     return (
       <Alert variant="destructive">
         <CircleAlert />
-        <AlertTitle>El paso no se corrió</AlertTitle>
+        <AlertTitle>
+          El paso no se corrió
+          {run.environment !== undefined && (
+            <EnvironmentBadge environment={run.environment} className="ms-2" />
+          )}
+        </AlertTitle>
         <AlertDescription>{run.reason}</AlertDescription>
       </Alert>
     )
   }
   // Base de los nombres de archivo: la operación del SDK, o el título del paso.
   const name = fileBase(run.step.raw?.operation ?? title)
-  return <StepTabs step={run.step} name={name} />
+  return <StepTabs step={run.step} name={name} environment={run.environment} />
 }
 
-function StepTabs({ step, name }: { step: StepResult; name: string }) {
+function StepTabs({
+  step,
+  name,
+  environment,
+}: {
+  step: StepResult
+  name: string
+  environment?: ConsoleEnvironmentId
+}) {
   const initial: Tab = step.ok ? "result" : "error"
   const [tab, setTab] = useState<Tab>(initial)
   // Con un paso nuevo se vuelve a la pestaña que le corresponde.
@@ -147,7 +165,7 @@ function StepTabs({ step, name }: { step: StepResult; name: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <StepSummary step={step} />
+      <StepSummary step={step} environment={environment} />
       <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
         <TabsList>
           <TabsTrigger value="result">Resultado</TabsTrigger>
@@ -199,9 +217,18 @@ function StepTabs({ step, name }: { step: StepResult; name: string }) {
   )
 }
 
-function StepSummary({ step }: { step: StepResult }) {
+function StepSummary({
+  step,
+  environment,
+}: {
+  step: StepResult
+  environment?: ConsoleEnvironmentId
+}) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
+      {environment !== undefined && (
+        <EnvironmentBadge environment={environment} />
+      )}
       {step.ok ? (
         <Badge>ok</Badge>
       ) : (

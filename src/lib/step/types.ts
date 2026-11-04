@@ -1,4 +1,5 @@
 import type { SabreLogLevel, SabreRawResponse } from "sabre-client"
+import type { ConsoleEnvironmentId } from "@/lib/environment"
 
 /**
  * Lo que devuelve `runStep()` y recibe el `StepPanel`. Son datos planos (JSON): viajan del
@@ -52,8 +53,10 @@ export interface StepResult<T = unknown> {
 /**
  * Lo que devuelve una server action de un paso: el `StepResult`, o la razón por la que el
  * paso no se pudo correr (entorno sin credenciales, config inválida). En el segundo caso
- * no hubo llamada al SDK.
+ * no hubo llamada al SDK. `environment` es el entorno contra el que corrió; falta si el que
+ * pidió el cliente no era válido.
  */
-export type StepRun<T = unknown> =
+export type StepRun<T = unknown> = (
   | { enabled: true; step: StepResult<T> }
   | { enabled: false; reason: string }
+) & { environment?: ConsoleEnvironmentId }

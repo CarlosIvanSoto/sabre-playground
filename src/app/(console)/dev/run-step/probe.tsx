@@ -3,13 +3,14 @@
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
+import { useEnvironment } from "@/components/environment/environment-provider"
 import { StepPanel } from "@/components/step/step-panel"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import type { StepRun } from "@/lib/step/types"
 import {
-  countFakeQueues,
+  countQueues,
   getBooking,
   openAndCloseSession,
   searchFlights,
@@ -21,6 +22,7 @@ import {
 } from "./schema"
 
 export function BookingGetProbe() {
+  const { environment } = useEnvironment()
   const [run, setRun] = useState<StepRun>()
   const [pending, startTransition] = useTransition()
   const form = useForm<BookingGetInput>({
@@ -31,7 +33,7 @@ export function BookingGetProbe() {
 
   const onSubmit = form.handleSubmit((input) =>
     startTransition(async () => {
-      setRun(await getBooking(input))
+      setRun(await getBooking(environment.id, input))
     })
   )
 
@@ -70,8 +72,9 @@ function ButtonProbe({
 }: {
   title: string
   description: string
-  action: () => Promise<StepRun>
+  action: (environment: string) => Promise<StepRun>
 }) {
+  const { environment } = useEnvironment()
   const [run, setRun] = useState<StepRun>()
   const [pending, startTransition] = useTransition()
 
@@ -86,7 +89,7 @@ function ButtonProbe({
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              setRun(await action())
+              setRun(await action(environment.id))
             })
           }
         >
@@ -117,12 +120,12 @@ export function SearchProbe() {
   )
 }
 
-export function FakeQueueProbe() {
+export function QueueCountProbe() {
   return (
     <ButtonProbe
-      title="session.queue.count (fake)"
-      description="Contra createQueueFake, sin red ni credenciales: un sobre SOAP de cola con datos sintéticos."
-      action={countFakeQueues}
+      title="session.queue.count"
+      description="Abre una sesión, cuenta las colas del PCC y la cierra. En fake corre sin red, con colas sintéticas."
+      action={countQueues}
     />
   )
 }
