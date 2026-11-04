@@ -1,7 +1,7 @@
 "use client"
 
 import { cn } from "cn"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, ChevronsDownUp, ChevronsUpDown } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -15,6 +15,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 /**
  * Árbol JSON colapsable por nivel, sobre el `CodeBlock` de shadcn: el mismo marco, tamaño y
@@ -39,7 +44,8 @@ function JsonTree({
   className,
   ...props
 }: JsonTreeProps) {
-  // Expandir o colapsar todo vuelve a montar el árbol con otra profundidad inicial.
+  // Expandir o colapsar todo vuelve a montar el árbol con otra profundidad inicial: todo
+  // abierto, o todo cerrado (también la raíz, para que el cambio se vea en cualquier JSON).
   const [depth, setDepth] = useState({ value: defaultDepth, version: 0 })
   const data = (value === undefined ? null : value) as Json
   const expandable = data !== null && typeof data === "object"
@@ -54,24 +60,22 @@ function JsonTree({
       <CodeBlockActions>
         {expandable && (
           <>
-            <Button
-              variant="ghost"
-              size="xs"
+            <IconAction
+              label="Expandir todo"
               onClick={() =>
                 setDepth((d) => ({ value: Infinity, version: d.version + 1 }))
               }
             >
-              Expandir
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
+              <ChevronsUpDown />
+            </IconAction>
+            <IconAction
+              label="Colapsar todo"
               onClick={() =>
-                setDepth((d) => ({ value: 1, version: d.version + 1 }))
+                setDepth((d) => ({ value: 0, version: d.version + 1 }))
               }
             >
-              Colapsar
-            </Button>
+              <ChevronsDownUp />
+            </IconAction>
           </>
         )}
         <CodeBlockCopyButton value={JSON.stringify(data, null, 2)} />
@@ -86,6 +90,35 @@ function JsonTree({
         />
       </CodeBlockContent>
     </CodeBlock>
+  )
+}
+
+/** Botón de ícono de la barra, con el mismo tamaño que el de copiar y su tooltip. */
+function IconAction({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={label}
+            onClick={onClick}
+          />
+        }
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 
