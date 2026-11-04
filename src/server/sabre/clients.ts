@@ -7,14 +7,16 @@ import {
   getEnvironment,
 } from "@/server/config/environments"
 import { sabreLogger } from "@/server/sabre/log"
+import { fileTokenStore } from "@/server/sabre/token-store"
 
 /**
  * Clientes de `sabre-client`, uno por entorno y por API, creados la primera vez que se piden.
  *
  * - Los dos clientes de un entorno usan el mismo `SabreConfig` (un solo juego de credenciales).
- * - El token vive en la caché en memoria de cada instancia, así que se reutiliza entre
- *   llamadas. No hay estado atado a un usuario ni a una cookie: el cliente sale solo del
- *   entorno (el error de la v1 en `src/lib/sabre/client.ts`).
+ * - El token vive en la caché en memoria de cada instancia y en `.sabre-token.json`
+ *   (`fileTokenStore`), así que se reutiliza entre llamadas y entre reinicios.
+ * - No hay estado atado a un usuario ni a una cookie: el cliente sale solo del entorno (el
+ *   error de la v1 en `src/lib/sabre/client.ts`).
  * - Los clientes y su token nunca salen del servidor.
  */
 
@@ -54,7 +56,11 @@ function create<T>(
       const config = environment.sabre.config
       result = {
         enabled: true,
-        client: build({ ...config, logger: sabreLogger }),
+        client: build({
+          ...config,
+          logger: sabreLogger,
+          tokenStore: fileTokenStore,
+        }),
       }
     } catch (error) {
       // Config que el SDK rechaza (p. ej. un username EPR sin formato de sesión SOAP). Los
