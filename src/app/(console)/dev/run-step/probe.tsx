@@ -1,13 +1,13 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState, useTransition } from "react"
 import { useForm } from "react-hook-form"
-import { useEnvironment } from "@/components/environment/environment-provider"
 import { StepPanel } from "@/components/step/step-panel"
+import { useStep } from "@/components/step/use-step"
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type { StepRun } from "@/lib/step/types"
 import {
   countQueues,
@@ -22,20 +22,14 @@ import {
 } from "./schema"
 
 export function BookingGetProbe() {
-  const { environment } = useEnvironment()
-  const [run, setRun] = useState<StepRun>()
-  const [pending, startTransition] = useTransition()
+  const { run, pending, execute } = useStep("booking.get", getBooking)
   const form = useForm<BookingGetInput>({
     resolver: zodResolver(bookingGetSchema),
     defaultValues: { confirmationId: MISSING_LOCATOR },
   })
   const error = form.formState.errors.confirmationId
 
-  const onSubmit = form.handleSubmit((input) =>
-    startTransition(async () => {
-      setRun(await getBooking(environment.id, input))
-    })
-  )
+  const onSubmit = form.handleSubmit((input) => execute(input))
 
   return (
     <StepPanel
@@ -72,11 +66,11 @@ function ButtonProbe({
 }: {
   title: string
   description: string
-  action: (environment: string) => Promise<StepRun>
+  action: (environment: ConsoleEnvironmentId) => Promise<StepRun>
 }) {
-  const { environment } = useEnvironment()
-  const [run, setRun] = useState<StepRun>()
-  const [pending, startTransition] = useTransition()
+  const { run, pending, execute } = useStep<void>(title, (environment) =>
+    action(environment)
+  )
 
   return (
     <StepPanel
@@ -85,14 +79,7 @@ function ButtonProbe({
       run={run}
       pending={pending}
       form={
-        <Button
-          disabled={pending}
-          onClick={() =>
-            startTransition(async () => {
-              setRun(await action(environment.id))
-            })
-          }
-        >
+        <Button disabled={pending} onClick={() => execute()}>
           Correr
         </Button>
       }

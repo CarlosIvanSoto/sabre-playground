@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
+import { fileBase } from "@/lib/step/file-name"
 import type {
   LogLine,
   RawResponse,
@@ -374,14 +375,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 /** Datos planos como árbol colapsable. `undefined` (sin resultado) se ve como `null`. */
 function Json({ value, filename }: { value: unknown; filename: string }) {
   return <JsonTree value={value} filename={filename} />
-}
-
-/**
- * Base de un nombre de archivo: `booking.get`, `queue.count`… Lo que no sea letra, dígito,
- * punto o guion pasa a `-` (`openSession + close` → `openSession-close`).
- */
-function fileBase(text: string): string {
-  return text.replace(/[^A-Za-z0-9.-]+/g, "-").replace(/^-|-$/g, "")
 }
 
 function Nothing({ children }: { children: ReactNode }) {

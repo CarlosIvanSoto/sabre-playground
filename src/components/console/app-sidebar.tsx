@@ -1,8 +1,9 @@
 "use client"
 
-import { FlaskConicalIcon, TerminalIcon } from "lucide-react"
+import { FlaskConicalIcon, HistoryIcon, TerminalIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useHistory } from "@/components/history/history-provider"
 import {
   Sidebar,
   SidebarContent,
@@ -11,15 +12,17 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { FLOWS } from "@/lib/flows"
 
-/** La navegación de la consola: los siete flujos y las páginas de desarrollo. */
+/** La navegación de la consola: los siete flujos, el historial y las páginas de desarrollo. */
 export function AppSidebar() {
   const pathname = usePathname()
+  const { entries } = useHistory()
 
   return (
     <Sidebar collapsible="icon">
@@ -63,6 +66,26 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Sesión</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Historial"
+                  isActive={pathname === "/history"}
+                  render={<Link href="/history" />}
+                >
+                  <HistoryIcon />
+                  <span>Historial</span>
+                </SidebarMenuButton>
+                {entries.length > 0 && (
+                  <SidebarMenuBadge>{entries.length}</SidebarMenuBadge>
+                )}
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
