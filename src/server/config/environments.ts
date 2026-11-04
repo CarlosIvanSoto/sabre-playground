@@ -1,6 +1,11 @@
 import "server-only"
 
-import type { SabreConfig, SabreEnvironment } from "sabre-client"
+import {
+  type BuildCredentialsOptions,
+  buildCredentials,
+  type SabreConfig,
+  type SabreEnvironment,
+} from "sabre-client"
 import { z } from "zod"
 
 /**
@@ -8,8 +13,10 @@ import { z } from "zod"
  *
  * - CERT es el entorno por defecto.
  * - Producción solo existe si `SABRE_PROD_ENABLED=true`, y siempre queda en solo lectura.
- * - Si a un bloque (REST o SOAP) le faltan variables o tiene alguna inválida, ese bloque queda
- *   deshabilitado con la razón. La app arranca igual, también sin `.env.local`.
+ * - Un solo juego de credenciales por entorno, armado con `buildCredentials`: el mismo
+ *   `SabreConfig` va a `Sabre` (REST) y a `SabreLegacy` (SOAP).
+ * - Si faltan variables, alguna es inválida o `buildCredentials` rechaza los datos, el entorno
+ *   queda deshabilitado con la razón. La app arranca igual, también sin `.env.local`.
  *
  * Los `SabreConfig` resultantes nunca salen del servidor. Para la UI está
  * `getEnvironmentSummary()`, que no lleva valores.
@@ -19,9 +26,7 @@ export type EnvironmentId = "cert" | "prod"
 
 export const DEFAULT_ENVIRONMENT: EnvironmentId = "cert"
 
-export type Api = "rest" | "soap"
-
-export type ApiConfig =
+export type CredentialsConfig =
   | { enabled: true; config: SabreConfig }
   | { enabled: false; reason: string }
 
@@ -31,8 +36,7 @@ export interface EnvironmentConfig {
   sdkEnvironment: SabreEnvironment
   /** Producción: sin Create ni Cancel Booking, y colas con confirmación explícita. */
   readOnly: boolean
-  rest: ApiConfig
-  soap: ApiConfig
+  sabre: CredentialsConfig
 }
 
 /** Lo que puede ver el cliente: sin credenciales ni valores de variables. */
@@ -40,58 +44,47 @@ export interface EnvironmentSummary {
   id: EnvironmentId
   label: string
   readOnly: boolean
-  rest: { enabled: boolean; reason?: string }
-  soap: { enabled: boolean; reason?: string }
+  enabled: boolean
+  reason?: string
 }
 
 type Env = Record<string, string | undefined>
 
 /** Una variable vacía (como las de `.env.example`) cuenta como ausente. */
-const optional = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
-  z.string().trim().optional()
-)
+const blankToUndefined = (value: unknown) =>
+  typeof value === "string" && value.trim() === "" ? undefined : value
+const optional = z.preprocess(blankToUndefined, z.string().trim().optional())
 const required = z.preprocess(
-  (value) =>
-    typeof value === "string" && value.trim() === "" ? undefined : value,
+  blankToUndefined,
   z.string({ error: "falta" }).trim()
 )
 
-const restSchema = z.discriminatedUnion(
+// Solo presencia y forma de las variables. El PCC, el domain y el par CLIENT_ID/CLIENT_SECRET
+// en v2 los valida `buildCredentials`.
+const base = {
+  USERNAME: required,
+  PCC: required,
+  DOMAIN: optional,
+  PASSWORD: required,
+}
+const credentialsSchema = z.discriminatedUnion(
   "AUTH_VERSION",
   [
     z.object({
+      ...base,
       AUTH_VERSION: z.literal("v3"),
       CLIENT_ID: required,
       CLIENT_SECRET: required,
-      USERNAME: required,
-      PASSWORD: required,
     }),
     z.object({
+      ...base,
       AUTH_VERSION: z.literal("v2"),
-      USERNAME: required,
-      PASSWORD: required,
+      CLIENT_ID: optional,
+      CLIENT_SECRET: optional,
     }),
   ],
   { error: "debe ser v3 o v2" }
 )
-
-const soapSchema = z
-  .object({
-    USERNAME: required,
-    PASSWORD: required,
-    CLIENT_ID: optional,
-    CLIENT_SECRET: optional,
-  })
-  .refine(
-    (soap) =>
-      (soap.CLIENT_ID === undefined) === (soap.CLIENT_SECRET === undefined),
-    {
-      error: "CLIENT_ID y CLIENT_SECRET van juntos o ninguno",
-      path: ["CLIENT_ID"],
-    }
-  )
 
 const flagSchema = z
   .preprocess(
@@ -123,7 +116,7 @@ const ENVIRONMENTS: Record<
   },
 }
 
-/** Las variables `<prefix>_<api>_*`, sin el prefijo. */
+/** Las variables `<prefix>_*`, sin el prefijo. */
 function pick(env: Env, prefix: string): Env {
   const out: Env = {}
   const start = `${prefix}_`
@@ -143,94 +136,76 @@ function describe(error: z.ZodError, prefix: string): string {
   return problems.join("; ")
 }
 
-function restConfig(
+function credentialsConfig(
   env: Env,
   prefix: string,
-  environment: SabreEnvironment,
-  pcc?: string
-): ApiConfig {
-  const vars = pick(env, `${prefix}_REST`)
+  environment: SabreEnvironment
+): CredentialsConfig {
+  // SABRE_PROD_ENABLED es el interruptor, no una credencial.
+  const { ENABLED: _enabled, ...vars } = pick(env, prefix)
   if (Object.values(vars).every((value) => !value?.trim())) {
-    return { enabled: false, reason: `sin variables ${prefix}_REST_*` }
+    return { enabled: false, reason: `sin variables ${prefix}_*` }
   }
-  const parsed = restSchema.safeParse({
+  const parsed = credentialsSchema.safeParse({
     ...vars,
     AUTH_VERSION: vars.AUTH_VERSION?.trim() || "v3",
   })
   if (!parsed.success) {
-    return { enabled: false, reason: describe(parsed.error, `${prefix}_REST`) }
+    return { enabled: false, reason: describe(parsed.error, prefix) }
   }
-  const rest = parsed.data
-  const config: SabreConfig =
-    rest.AUTH_VERSION === "v3"
+  const v = parsed.data
+  const parts = {
+    user: v.USERNAME,
+    pcc: v.PCC,
+    domain: v.DOMAIN,
+    password: v.PASSWORD,
+  }
+  const options: BuildCredentialsOptions =
+    v.AUTH_VERSION === "v3"
       ? {
-          environment,
-          pcc,
+          ...parts,
           authVersion: "v3",
-          credentials: {
-            clientId: rest.CLIENT_ID,
-            clientSecret: rest.CLIENT_SECRET,
-            username: rest.USERNAME,
-            password: rest.PASSWORD,
-          },
+          clientId: v.CLIENT_ID,
+          clientSecret: v.CLIENT_SECRET,
         }
       : {
-          environment,
-          pcc,
+          ...parts,
           authVersion: "v2",
-          credentials: { username: rest.USERNAME, password: rest.PASSWORD },
+          clientId: v.CLIENT_ID,
+          clientSecret: v.CLIENT_SECRET,
         }
-  return { enabled: true, config }
-}
-
-function soapConfig(
-  env: Env,
-  prefix: string,
-  environment: SabreEnvironment,
-  pcc?: string
-): ApiConfig {
-  const vars = pick(env, `${prefix}_SOAP`)
-  if (Object.values(vars).every((value) => !value?.trim())) {
-    return { enabled: false, reason: `sin variables ${prefix}_SOAP_*` }
+  try {
+    // Sin `pcc` en la config: el PCC ya va en el username de las credenciales.
+    const config: SabreConfig =
+      options.authVersion === "v2"
+        ? {
+            environment,
+            authVersion: "v2",
+            credentials: buildCredentials(options),
+          }
+        : {
+            environment,
+            authVersion: "v3",
+            credentials: buildCredentials(options),
+          }
+    return { enabled: true, config }
+  } catch (error) {
+    // `buildCredentials` valida sin red y sus mensajes no repiten secretos.
+    if (error instanceof TypeError) {
+      return { enabled: false, reason: `${prefix}_*: ${error.message}` }
+    }
+    throw error
   }
-  const parsed = soapSchema.safeParse(vars)
-  if (!parsed.success) {
-    return { enabled: false, reason: describe(parsed.error, `${prefix}_SOAP`) }
-  }
-  const soap = parsed.data
-  // Con CLIENT_ID y CLIENT_SECRET el SDK usa SessionCreateRQ 2.0.0; sin ellos, 1.0.0.
-  const config: SabreConfig =
-    soap.CLIENT_ID !== undefined && soap.CLIENT_SECRET !== undefined
-      ? {
-          environment,
-          pcc,
-          authVersion: "v3",
-          credentials: {
-            clientId: soap.CLIENT_ID,
-            clientSecret: soap.CLIENT_SECRET,
-            username: soap.USERNAME,
-            password: soap.PASSWORD,
-          },
-        }
-      : {
-          environment,
-          pcc,
-          authVersion: "v2",
-          credentials: { username: soap.USERNAME, password: soap.PASSWORD },
-        }
-  return { enabled: true, config }
 }
 
 function environmentConfig(env: Env, id: EnvironmentId): EnvironmentConfig {
   const { prefix, label, sdkEnvironment, readOnly } = ENVIRONMENTS[id]
-  const pcc = optional.parse(env[`${prefix}_PCC`])
   return {
     id,
     label,
     sdkEnvironment,
     readOnly,
-    rest: restConfig(env, prefix, sdkEnvironment, pcc),
-    soap: soapConfig(env, prefix, sdkEnvironment, pcc),
+    sabre: credentialsConfig(env, prefix, sdkEnvironment),
   }
 }
 
@@ -258,18 +233,13 @@ export function getEnvironment(
   return getEnvironments().find((environment) => environment.id === id)
 }
 
-function summarizeApi(api: ApiConfig): EnvironmentSummary["rest"] {
-  return api.enabled
-    ? { enabled: true }
-    : { enabled: false, reason: api.reason }
-}
-
 export function getEnvironmentSummary(): EnvironmentSummary[] {
-  return getEnvironments().map(({ id, label, readOnly, rest, soap }) => ({
+  return getEnvironments().map(({ id, label, readOnly, sabre }) => ({
     id,
     label,
     readOnly,
-    rest: summarizeApi(rest),
-    soap: summarizeApi(soap),
+    ...(sabre.enabled
+      ? { enabled: true }
+      : { enabled: false, reason: sabre.reason }),
   }))
 }
