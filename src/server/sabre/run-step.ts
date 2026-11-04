@@ -5,41 +5,16 @@ import {
   type SabreRawResponse,
   type SabreRawResponseCallback,
 } from "sabre-client"
-import { captureLog, type LogLine } from "@/server/sabre/log"
+import type { LogLine, StepError, StepResult } from "@/lib/step/types"
+import { captureLog } from "@/server/sabre/log"
 
-/** `SabreRawResponse` con los headers como objeto, para que viaje en el payload. */
-export interface RawResponse extends Omit<SabreRawResponse, "headers"> {
-  headers: Record<string, string>
-}
-
-/** Error serializado: clase y campos públicos. Nunca `raw`. */
-export interface StepError {
-  /** `SabreBusinessError`, `SabreGatewayError`, `TypeError`… */
-  class: string
-  message: string
-  code?: string
-  retryable?: boolean
-  status?: number
-  protocol?: string
-  service?: string
-  kind?: string
-  warnings?: unknown[]
-  errors?: unknown[]
-}
-
-export interface StepResult<T> {
-  ok: boolean
-  /** Lo que devolvió el SDK, si no lanzó. */
-  result?: T
-  /** Body del último intento HTTP, también cuando la llamada lanza. */
-  raw?: RawResponse
-  error?: StepError
-  /** Lo que el SDK mandó al logger durante la llamada, ya redactado. */
-  log: LogLine[]
-  durationMs: number
-  /** Intentos HTTP, contando los reintentos. Sin respuesta HTTP no se sabe. */
-  attempts?: number
-}
+export type {
+  LogLine,
+  RawResponse,
+  StepError,
+  StepResult,
+  StepRun,
+} from "@/lib/step/types"
 
 export interface StepOptions {
   onRawResponse: SabreRawResponseCallback

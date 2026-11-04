@@ -2,15 +2,7 @@ import "server-only"
 
 import { AsyncLocalStorage } from "node:async_hooks"
 import type { SabreLogger, SabreLogLevel } from "sabre-client"
-
-/** Una línea del logger del SDK. `context` llega ya redactado por `sabre-client`. */
-export interface LogLine {
-  /** ISO 8601. */
-  at: string
-  level: SabreLogLevel
-  event: string
-  context?: Record<string, unknown>
-}
+import type { LogLine } from "@/lib/step/types"
 
 /**
  * El logger se fija al crear el cliente, y los clientes se comparten por entorno. Para que
