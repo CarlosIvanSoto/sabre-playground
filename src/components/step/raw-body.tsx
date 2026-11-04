@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { JsonTree } from "@/components/custom/json-tree"
 import { Button } from "@/components/ui/button"
 import {
   CodeBlock,
@@ -32,32 +33,61 @@ function detect(raw: RawResponse): { format: Format; pretty: string } {
 }
 
 /**
- * El body de la respuesta cruda, con formato y resaltado. "Tal cual" muestra el texto como
- * llegó, y el botón de copiar siempre copia ese texto original.
+ * El body de la respuesta cruda, con formato: el JSON como árbol colapsable y el XML con
+ * sangría y resaltado. "Tal cual" muestra el texto como llegó, resaltado, y su botón de
+ * copiar copia ese texto original.
  */
 export function RawBody({ raw }: { raw: RawResponse }) {
   const { format, pretty } = detect(raw)
   const [asIs, setAsIs] = useState(false)
-  const text = asIs ? raw.body : pretty
-  // Sin lenguaje, el hook devuelve las líneas sin resaltar.
-  const language =
-    format === "text" || text.length > HIGHLIGHT_LIMIT ? "" : format
-  const lines = useHighlightedCode(text, language)
 
   return (
-    <CodeBlock size="sm">
-      <CodeBlockActions>
-        {format !== "text" && (
+    <div className="flex flex-col gap-2">
+      {format !== "text" && (
+        <div className="flex justify-end">
           <Button
-            variant="ghost"
+            variant="outline"
             size="xs"
             aria-pressed={asIs}
             onClick={() => setAsIs((value) => !value)}
           >
             {asIs ? "Con formato" : "Tal cual"}
           </Button>
-        )}
-        <CodeBlockCopyButton value={raw.body} />
+        </div>
+      )}
+      {format === "json" && !asIs ? (
+        <JsonTree value={JSON.parse(raw.body)} />
+      ) : (
+        <Text
+          text={asIs ? raw.body : pretty}
+          original={raw.body}
+          language={format === "text" ? "" : format}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Texto resaltado. El botón de copiar copia `original`, el body como llegó. */
+function Text({
+  text,
+  original,
+  language,
+}: {
+  text: string
+  original: string
+  language: string
+}) {
+  // Sin lenguaje, el hook devuelve las líneas sin resaltar.
+  const lines = useHighlightedCode(
+    text,
+    text.length > HIGHLIGHT_LIMIT ? "" : language
+  )
+
+  return (
+    <CodeBlock size="sm">
+      <CodeBlockActions>
+        <CodeBlockCopyButton value={original} />
       </CodeBlockActions>
       <CodeBlockContent wrap className="max-h-[32rem]">
         {lines.map((line, index) => (

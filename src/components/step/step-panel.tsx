@@ -2,6 +2,7 @@
 
 import { CircleAlert, Play } from "lucide-react"
 import { type ReactNode, useState } from "react"
+import { JsonTree } from "@/components/custom/json-tree"
 import { RawBody } from "@/components/step/raw-body"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -12,12 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  CodeBlock,
-  CodeBlockActions,
-  CodeBlockContent,
-  CodeBlockCopyButton,
-} from "@/components/ui/code-block"
 import {
   Empty,
   EmptyDescription,
@@ -330,27 +325,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-/** JSON con sangría. El visor colapsable llega con F1.2 (#6). */
+/** Datos planos como árbol colapsable. `undefined` (sin resultado) se ve como `null`. */
 function Json({ value }: { value: unknown }) {
-  return (
-    <Code
-      text={value === undefined ? "undefined" : JSON.stringify(value, null, 2)}
-    />
-  )
-}
-
-/** Texto tal cual (body, JSON), con botón de copiar. */
-function Code({ text }: { text: string }) {
-  return (
-    <CodeBlock size="sm">
-      <CodeBlockActions>
-        <CodeBlockCopyButton value={text} />
-      </CodeBlockActions>
-      <CodeBlockContent wrap className="max-h-[32rem]">
-        {text}
-      </CodeBlockContent>
-    </CodeBlock>
-  )
+  return <JsonTree value={value} />
 }
 
 function Nothing({ children }: { children: ReactNode }) {
