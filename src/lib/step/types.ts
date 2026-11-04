@@ -43,6 +43,13 @@ export interface StepResult<T = unknown> {
   /** Body del último intento HTTP, también cuando la llamada lanza. */
   raw?: RawResponse
   error?: StepError
+  /**
+   * `warnings` del resultado, si el SDK los devolvió sin lanzar (`booking.get`, `air.getSeats`…).
+   * Se muestran en la pestaña Error junto al error, si lo hay.
+   */
+  warnings?: unknown[]
+  /** `errors` que llegaron junto con un resultado: la llamada no lanzó, pero falta algo. */
+  partialErrors?: unknown[]
   /** Lo que el SDK mandó al logger durante la llamada, ya redactado. */
   log: LogLine[]
   durationMs: number

@@ -34,6 +34,13 @@ function serializeError(error: unknown): StepError {
   return { class: typeof error, message: String(error) }
 }
 
+/** `value[key]` si es una lista con algo: los `warnings` y `errors` que el SDK no lanza. */
+function nonEmptyList(value: unknown, key: string): unknown[] | undefined {
+  if (typeof value !== "object" || value === null) return undefined
+  const list = (value as Record<string, unknown>)[key]
+  return Array.isArray(list) && list.length > 0 ? list : undefined
+}
+
 /**
  * Corre una llamada del SDK y junta todo lo que hace falta para mostrarla: el resultado
  * tipado, la respuesta cruda, el error y el log. Nunca lanza.
@@ -64,9 +71,12 @@ export async function runStep<T>(
   const durationMs = Math.round(performance.now() - startedAt)
 
   const captured: SabreRawResponse | undefined = raw
+  const plain = toPlain(result)
   return {
     ok: error === undefined,
-    result: toPlain(result),
+    result: plain,
+    warnings: nonEmptyList(plain, "warnings"),
+    partialErrors: nonEmptyList(plain, "errors"),
     raw:
       captured === undefined
         ? undefined
