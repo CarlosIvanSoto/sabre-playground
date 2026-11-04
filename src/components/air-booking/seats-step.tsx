@@ -23,11 +23,17 @@ import {
 export function SeatsStep({
   revalidated,
   plan,
+  disabled = false,
+  onStart,
+  onDone,
   onPlan,
 }: {
   revalidated?: ChosenItinerary
   plan?: SeatPlan
-  onPlan: (plan: SeatPlan | undefined) => void
+  disabled?: boolean
+  onStart: () => void
+  onDone: (ok: boolean) => void
+  onPlan: (plan: SeatPlan) => void
 }) {
   const { run, pending, execute } = useStep(
     "air.getSeats",
@@ -45,8 +51,11 @@ export function SeatsStep({
 
   const load = () => {
     if (revalidated === undefined) return
-    onPlan(undefined)
-    execute({ group: revalidated.group, itinerary: revalidated.itinerary })
+    onStart()
+    execute(
+      { group: revalidated.group, itinerary: revalidated.itinerary },
+      (result) => onDone(result.enabled && result.step.ok)
+    )
   }
 
   const pick = (segmentRef: string, number: string) => {
@@ -76,7 +85,11 @@ export function SeatsStep({
       run={run}
       pending={pending}
       resultView={(result) => (
-        <SeatMapView result={result} picked={picked} onPick={pick} />
+        <SeatMapView
+          result={result}
+          picked={picked}
+          onPick={disabled ? undefined : pick}
+        />
       )}
       form={
         <div className="flex flex-col gap-4">
@@ -92,7 +105,7 @@ export function SeatsStep({
           )}
           <Button
             onClick={load}
-            disabled={pending || revalidated === undefined}
+            disabled={pending || disabled || revalidated === undefined}
           >
             Ver asientos
           </Button>
@@ -113,7 +126,7 @@ export function SeatsStep({
           <Button
             variant="outline"
             onClick={() => onPlan({ seats: [] })}
-            disabled={pending || revalidated === undefined}
+            disabled={pending || disabled || revalidated === undefined}
           >
             Seguir sin asiento
           </Button>
