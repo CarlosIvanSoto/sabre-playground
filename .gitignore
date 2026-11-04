@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# token OAuth guardado entre corridas (tokenStore en archivo): es un secreto
+.sabre-token.json
+.sabre-token.json.*.tmp
+
 # vercel
 .vercel
 
