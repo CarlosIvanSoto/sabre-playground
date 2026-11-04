@@ -1,11 +1,11 @@
 "use server"
 
 import type { BargainFinderMaxRequest, SabreSession } from "sabre-client"
+import { bookingGetSchema } from "@/lib/booking"
 import { getEnvironment } from "@/server/config/environments"
 import { getSabre, getSabreLegacy } from "@/server/sabre/clients"
 import { runStep, type StepRun } from "@/server/sabre/run-step"
 import { inEnvironment } from "@/server/sabre/step-action"
-import { bookingGetSchema } from "./schema"
 
 /**
  * Pasos de prueba de `runStep` (F0.4), en el entorno que se eligió en la consola.
