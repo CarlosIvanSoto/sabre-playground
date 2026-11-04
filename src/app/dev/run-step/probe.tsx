@@ -8,7 +8,12 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import type { StepRun } from "@/lib/step/types"
-import { getBooking, openAndCloseSession } from "./actions"
+import {
+  countFakeQueues,
+  getBooking,
+  openAndCloseSession,
+  searchFlights,
+} from "./actions"
 import {
   type BookingGetInput,
   bookingGetSchema,
@@ -57,14 +62,23 @@ export function BookingGetProbe() {
   )
 }
 
-export function SessionProbe() {
+/** Un paso sin formulario: solo el botón de correr. */
+function ButtonProbe({
+  title,
+  description,
+  action,
+}: {
+  title: string
+  description: string
+  action: () => Promise<StepRun>
+}) {
   const [run, setRun] = useState<StepRun>()
   const [pending, startTransition] = useTransition()
 
   return (
     <StepPanel
-      title="openSession + close"
-      description="Abre una sesión SOAP y la cierra en el mismo paso."
+      title={title}
+      description={description}
       run={run}
       pending={pending}
       form={
@@ -72,13 +86,43 @@ export function SessionProbe() {
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              setRun(await openAndCloseSession())
+              setRun(await action())
             })
           }
         >
           Correr
         </Button>
       }
+    />
+  )
+}
+
+export function SessionProbe() {
+  return (
+    <ButtonProbe
+      title="openSession + close"
+      description="Abre una sesión SOAP y la cierra en el mismo paso."
+      action={openAndCloseSession}
+    />
+  )
+}
+
+export function SearchProbe() {
+  return (
+    <ButtonProbe
+      title="air.bargainFinderMax"
+      description="Ida MEX → CUN dentro de 30 días, 1 adulto. Una respuesta REST grande."
+      action={searchFlights}
+    />
+  )
+}
+
+export function FakeQueueProbe() {
+  return (
+    <ButtonProbe
+      title="session.queue.count (fake)"
+      description="Contra createQueueFake, sin red ni credenciales: un sobre SOAP de cola con datos sintéticos."
+      action={countFakeQueues}
     />
   )
 }

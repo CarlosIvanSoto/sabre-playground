@@ -27,7 +27,8 @@ export type EnvironmentId = "cert" | "prod"
 export const DEFAULT_ENVIRONMENT: EnvironmentId = "cert"
 
 export type CredentialsConfig =
-  | { enabled: true; config: SabreConfig }
+  /** `pcc`: el del EPR, para los requests que lo piden en el body (el `POS` de BFM). */
+  | { enabled: true; config: SabreConfig; pcc: string }
   | { enabled: false; reason: string }
 
 export interface EnvironmentConfig {
@@ -188,7 +189,7 @@ function credentialsConfig(
             authVersion: "v3",
             credentials: buildCredentials(options),
           }
-    return { enabled: true, config }
+    return { enabled: true, config, pcc: v.PCC.toUpperCase() }
   } catch (error) {
     // `buildCredentials` valida sin red y sus mensajes no repiten secretos.
     if (error instanceof TypeError) {

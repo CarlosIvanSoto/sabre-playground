@@ -1,6 +1,12 @@
-import { BookingGetProbe, SessionProbe } from "./probe"
+import {
+  BookingGetProbe,
+  FakeQueueProbe,
+  SearchProbe,
+  SessionProbe,
+} from "./probe"
 
-/** Página de prueba de `runStep()` (F0.4), vista con el `StepPanel` (F1.1). */
+/** Página de prueba de `runStep()` (F0.4), vista con el `StepPanel` (F1.1), más
+ * un BFM y un sobre de cola para el visor de Crudo (F1.2). */
 export default function RunStepPage() {
   return (
     <main className="container mx-auto flex flex-col gap-6 px-4 py-8">
@@ -14,6 +20,8 @@ export default function RunStepPage() {
       </div>
       <BookingGetProbe />
       <SessionProbe />
+      <SearchProbe />
+      <FakeQueueProbe />
     </main>
   )
 }

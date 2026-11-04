@@ -20,6 +20,7 @@ const languages = {
   sql: () => import("shiki/langs/sql.mjs"),
   tsx: () => import("shiki/langs/tsx.mjs"),
   typescript: () => import("shiki/langs/typescript.mjs"),
+  xml: () => import("shiki/langs/xml.mjs"),
   yaml: () => import("shiki/langs/yaml.mjs"),
 }
 

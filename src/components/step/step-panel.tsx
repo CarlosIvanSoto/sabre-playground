@@ -2,6 +2,7 @@
 
 import { CircleAlert, Play } from "lucide-react"
 import { type ReactNode, useState } from "react"
+import { RawBody } from "@/components/step/raw-body"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -233,11 +234,7 @@ function RawView({ raw }: { raw: RawResponse }) {
       <Fields
         rows={Object.entries(raw.headers).map(([name, value]) => [name, value])}
       />
-      {raw.body === "" ? (
-        <Nothing>Body vacío.</Nothing>
-      ) : (
-        <Code text={raw.body} />
-      )}
+      {raw.body === "" ? <Nothing>Body vacío.</Nothing> : <RawBody raw={raw} />}
     </div>
   )
 }
