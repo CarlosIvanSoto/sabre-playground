@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Piezas de la v1 apartadas para F4.2/F4.3 (no compilan todavía).
+    "apartado/**",
   ]),
 ]);
 
