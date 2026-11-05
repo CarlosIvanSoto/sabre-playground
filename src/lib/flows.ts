@@ -1,8 +1,16 @@
+import type { EnvironmentOption } from "@/lib/environment"
+
 /**
  * Los siete flujos de la consola (ADR-022, consola-visual). La navegación, el encabezado de
  * cada flujo y su enlace "Qué es esto" salen de acá. Un servicio nuevo del SDK suma una
  * entrada.
  */
+
+/**
+ * Qué cliente usa el flujo: `rest` (`Sabre`), `soap` (`SabreLegacy`) o `local` (sin red). En
+ * fake solo corren `soap`, contra `createQueueFake`, y `local`.
+ */
+export type FlowApi = "rest" | "soap" | "local"
 
 export interface Flow {
   /** Segmento de la ruta: `/air-booking`. */
@@ -17,6 +25,7 @@ export interface Flow {
   wiki: string
   /** Fase del plan v2 en la que llega el flujo. */
   phase: number
+  api: FlowApi
 }
 
 export const FLOWS: Flow[] = [
@@ -29,6 +38,7 @@ export const FLOWS: Flow[] = [
     methods: ["automático (AuthManager)", "booking.get"],
     wiki: "wiki/proyectos/sabre-client/decisiones/renovacion-token-oauth.md",
     phase: 2,
+    api: "rest",
   },
   {
     slug: "air-booking",
@@ -46,6 +56,7 @@ export const FLOWS: Flow[] = [
     ],
     wiki: "wiki/concepts/flujo-air-booking.md",
     phase: 3,
+    api: "rest",
   },
   {
     slug: "seats",
@@ -56,6 +67,7 @@ export const FLOWS: Flow[] = [
     methods: ["air.getSeats"],
     wiki: "wiki/proyectos/sabre-client/decisiones/get-seats-en-el-sdk.md",
     phase: 2,
+    api: "rest",
   },
   {
     slug: "booking",
@@ -65,6 +77,7 @@ export const FLOWS: Flow[] = [
     methods: ["booking.get", "booking.cancel"],
     wiki: "wiki/proyectos/sabre-client/decisiones/gestion-de-reserva.md",
     phase: 2,
+    api: "rest",
   },
   {
     slug: "session",
@@ -75,6 +88,7 @@ export const FLOWS: Flow[] = [
     methods: ["legacy.openSession", "session.ping", "session.close"],
     wiki: "wiki/entities/create-session.md",
     phase: 4,
+    api: "soap",
   },
   {
     slug: "queues",
@@ -85,6 +99,7 @@ export const FLOWS: Flow[] = [
     methods: ["session.queue.*"],
     wiki: "wiki/entities/queue-management.md",
     phase: 4,
+    api: "soap",
   },
   {
     slug: "queue-paragraph",
@@ -95,9 +110,32 @@ export const FLOWS: Flow[] = [
     methods: ["parseQueueParagraph", "resolveHostDate"],
     wiki: "wiki/proyectos/sabre-client/decisiones/tier-3-sesion-y-colas-soap.md",
     phase: 4,
+    api: "local",
   },
 ]
 
 export function getFlow(slug: string): Flow | undefined {
   return FLOWS.find((flow) => flow.slug === slug)
+}
+
+/** Por qué REST no corre en fake. */
+export const FAKE_REST_REASON =
+  "el modo fake no tiene fixtures REST: sabre-client/testing solo trae colas"
+
+/** Por qué el flujo no corre en ese entorno, o `undefined` si corre. */
+export function flowUnavailable(
+  flow: Flow,
+  environment: EnvironmentOption
+): string | undefined {
+  if (flow.api === "local") return undefined
+  if (!environment.enabled) {
+    return environment.reason ?? "entorno deshabilitado"
+  }
+  if (flow.api === "rest" && environment.id === "fake") return FAKE_REST_REASON
+  return undefined
+}
+
+/** El flujo de una ruta: `/queues/TEST/9` → colas. */
+export function flowOfPath(pathname: string): Flow | undefined {
+  return getFlow(pathname.split("/")[1] ?? "")
 }

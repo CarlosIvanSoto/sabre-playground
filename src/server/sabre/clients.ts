@@ -8,6 +8,7 @@ import {
 } from "sabre-client"
 import { createQueueFake, type QueueFake } from "sabre-client/testing"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
+import { FAKE_REST_REASON } from "@/lib/flows"
 import {
   DEFAULT_ENVIRONMENT,
   type EnvironmentId,
@@ -87,10 +88,6 @@ function create<T>(
   cache.set(id, result)
   return result
 }
-
-/** Por qué REST no corre en fake. */
-const FAKE_REST_REASON =
-  "el modo fake no tiene fixtures REST: sabre-client/testing solo trae colas"
 
 /**
  * `SabreLegacy` del modo fake: sin red, contra `createQueueFake`, con las colas que arma

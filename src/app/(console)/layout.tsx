@@ -1,5 +1,6 @@
 import { connection } from "next/server"
 import { AppSidebar } from "@/components/console/app-sidebar"
+import { FlowGate } from "@/components/console/flow-gate"
 import { EnvironmentProvider } from "@/components/environment/environment-provider"
 import { EnvironmentSwitcher } from "@/components/environment/environment-switcher"
 import { HistoryProvider } from "@/components/history/history-provider"
@@ -34,7 +35,7 @@ export default async function ConsoleLayout({
               </div>
             </header>
             <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-              {children}
+              <FlowGate>{children}</FlowGate>
             </div>
           </SidebarInset>
         </SidebarProvider>
