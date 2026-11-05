@@ -1,5 +1,6 @@
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import { formatXml } from "@/lib/format-xml"
+import { createRedactor } from "@/lib/redact"
 import type { StepRun } from "@/lib/step/types"
 
 /**
@@ -9,6 +10,9 @@ import type { StepRun } from "@/lib/step/types"
  *
  * El request es lo que la consola le pasó a la server action (la entrada del paso): el SDK no
  * expone el body que manda a Sabre.
+ *
+ * Todo pasa por `redact.ts` (F6.2, #24): sin token ni datos personales, con localizador,
+ * segmentos, tarifas y códigos de error tal cual.
  *
  * Corre en el navegador, sobre lo que ya llegó al cliente.
  */
@@ -71,7 +75,26 @@ function formatDate(iso: string): string {
 
 /** El hallazgo en Markdown. */
 export function findingMarkdown(source: FindingSource): string {
-  const { method, input, run } = source
+  const { method, run } = source
+  const redactor = createRedactor()
+  // Pasada estructural de todas las partes antes de las de texto: un valor que aparece en la
+  // respuesta cruda también se reemplaza en la entrada y en el error.
+  const step = run.enabled ? run.step : undefined
+  const body =
+    step?.raw === undefined || step.raw.body === ""
+      ? undefined
+      : redactor.body(step.raw.body)
+  const input = redactor.structure(source.input)
+  const issues =
+    step === undefined
+      ? {}
+      : (redactor.structure({
+          ...(step.error === undefined ? {} : { error: step.error }),
+          ...(step.warnings === undefined ? {} : { warnings: step.warnings }),
+          ...(step.partialErrors === undefined
+            ? {}
+            : { errors: step.partialErrors }),
+        }) as Record<string, unknown>)
   const at = source.at ?? new Date().toISOString()
   const day = at.slice(0, 10)
   const environment =
@@ -104,7 +127,9 @@ export function findingMarkdown(source: FindingSource): string {
       : `\`${step.error?.class ?? "error"}\`${step.error?.code === undefined ? "" : ` \`${step.error.code}\``}`
     out.push(`- **Resultado**: ${outcome}`)
   }
-  out.push("- **Fuente**: sabre-playground")
+  out.push(
+    "- **Fuente**: sabre-playground (datos personales y token redactados)"
+  )
 
   out.push("", "**Request** (entrada del paso)", "")
   out.push(
@@ -121,27 +146,20 @@ export function findingMarkdown(source: FindingSource): string {
     out.push("", "**Respuesta cruda**", "")
     if (step.raw === undefined) {
       out.push("_Sin respuesta HTTP: la llamada no llegó a Sabre._")
-    } else if (step.raw.body === "") {
+    } else if (body === undefined) {
       out.push(`_HTTP ${step.raw.status}, body vacío._`)
     } else {
-      const pretty = prettyBody(step.raw.body)
-      const clipped = clip(pretty.text)
+      const pretty = prettyBody(body)
+      const clipped = clip(redactor.text(pretty.text))
       if (clipped.note !== undefined) out.push(`_${clipped.note}_`, "")
       out.push(fence(pretty.language, clipped.text))
     }
 
-    const issues = {
-      ...(step.error === undefined ? {} : { error: step.error }),
-      ...(step.warnings === undefined ? {} : { warnings: step.warnings }),
-      ...(step.partialErrors === undefined
-        ? {}
-        : { errors: step.partialErrors }),
-    }
     out.push("", "**Error**", "")
     out.push(
       Object.keys(issues).length === 0
         ? "_Sin error ni avisos._"
-        : fence("json", json(issues))
+        : fence("json", json(redactor.value(issues)))
     )
   }
 
