@@ -57,6 +57,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  disabledReason,
   initialQueueJourney,
   type QueueJourney,
   type QueuePanel,
@@ -240,18 +241,6 @@ function FakeQueuesStep({ open }: { open: boolean }) {
       }
     />
   )
-}
-
-/** Por qué un paso no se puede correr donde está la sesión. */
-function disabledReason(place: SessionPlace, panel: QueuePanel): string {
-  if (place === "closed") return "Abre una sesión primero."
-  if (place === "unknown") {
-    return "La sesión está en unknown: primero queue.exit."
-  }
-  if (place === "inside") return "Solo fuera de una cola: primero queue.exit."
-  return panel === "exit"
-    ? "Solo dentro de una cola o en unknown."
-    : "Solo dentro de una cola: primero queue.access."
 }
 
 interface PanelProps {
