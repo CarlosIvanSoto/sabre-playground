@@ -1,14 +1,19 @@
 "use server"
 
 import {
+  buildBookingFlightDetails,
   buildRevalidateItineraryRequest,
   buildSeatAvailabilityRequest,
 } from "sabre-client"
 import {
   type ChosenItinerary,
+  type CreateInput,
   chosenItinerarySchema,
+  createSchema,
   revalidateSchema,
+  SYNTHETIC_CONTACT,
   searchSchema,
+  syntheticTravelers,
 } from "@/lib/air-booking"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type { StepRun } from "@/lib/step/types"
@@ -104,6 +109,56 @@ export async function getSeatsForItinerary(
       enabled: true,
       step: await runStep((options) =>
         sabre.client.air.getSeats(buildSeatAvailabilityRequest(chosen), options)
+      ),
+    }
+  })
+}
+
+/**
+ * Paso 4 (F3.4, #15): `buildBookingFlightDetails` y `booking.create`, con el itinerario
+ * revalidado y, si se eligieron, los asientos del paso 3. Los viajeros (`TEST/PASSENGER`) y el
+ * contacto son sintéticos y los pone el servidor. Sin `targetPcc`: reserva en el PCC de auth.
+ *
+ * Es una escritura: el SDK no la reintenta y la consola tampoco. Si falla (p. ej.
+ * `UNABLE_TO_BOOK_FLIGHTS_WRONG_STATUS_CODE` con un vuelo en `UC`, o `AUTH-176` con un asiento
+ * ocupado en el host), el error se muestra tal cual. En producción no corre (solo lectura):
+ * la UI lo deshabilita y esta action lo rechaza igual.
+ *
+ * Leer y cancelar la reserva usan las actions del flujo 4 (`booking/actions`).
+ */
+export async function createBooking(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    if (id !== "fake" && getEnvironment(id)?.readOnly !== false) {
+      return {
+        enabled: false,
+        reason: "Create Booking no corre en producción (solo lectura)",
+      }
+    }
+    const parsed = createSchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    const sabre = getSabre(id)
+    if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
+    const { group, itinerary, travelers, seats, seatAvailability } =
+      parsed.data as typeof parsed.data & CreateInput
+    return {
+      enabled: true,
+      step: await runStep((options) =>
+        sabre.client.booking.create(
+          {
+            flightDetails: buildBookingFlightDetails({
+              group,
+              itinerary,
+              seats,
+              seatAvailability,
+            }),
+            travelers: syntheticTravelers(travelers),
+            contactInfo: SYNTHETIC_CONTACT,
+          },
+          options
+        )
       ),
     }
   })

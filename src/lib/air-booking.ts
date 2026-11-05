@@ -220,3 +220,88 @@ export function segmentIndex(segmentRef: string): number | undefined {
   const match = /^S(\d+)$/.exec(segmentRef)
   return match === null ? undefined : Number(match[1])
 }
+
+/** Hasta 4 adultos, como la búsqueda. */
+const TRAVELERS_MAX = 4
+
+/**
+ * Entrada de Create (F3.4): el itinerario revalidado, cuántos viajeros y lo que dejó el paso de
+ * asientos. Los nombres y el contacto no viajan: son sintéticos y los pone el servidor.
+ */
+export const createSchema = chosenItinerarySchema.extend({
+  travelers: z.number().int().min(1).max(TRAVELERS_MAX),
+  seats: z
+    .array(
+      z.object({
+        segmentIndex: z.number().int().min(1),
+        travelerIndex: z.number().int().min(1).max(TRAVELERS_MAX),
+        number: z.string().regex(/^[0-9]+[A-Z]$/),
+      })
+    )
+    .max(16)
+    .default([]),
+  /** El mapa del paso de asientos: con él, el SDK avisa si un asiento elegido tiene precio. */
+  seatAvailability: z.looseObject({ response: z.looseObject({}) }).optional(),
+})
+
+export interface CreateInput extends ChosenItinerary {
+  travelers: number
+  seats?: BookingSeatSelection[]
+  seatAvailability?: GetSeatsResponse
+}
+
+/**
+ * Viajeros sintéticos (regla 5 del repo): el primero es `TEST/PASSENGER`; los demás cambian
+ * el nombre con una letra, porque `surname` no acepta dígitos.
+ */
+export function syntheticTravelers(count: number) {
+  return Array.from({ length: count }, (_, index) => ({
+    givenName:
+      index === 0 ? "PASSENGER" : `PASSENGER${String.fromCharCode(65 + index)}`,
+    surname: "TEST",
+    passengerCode: "ADT",
+  }))
+}
+
+/** Contacto sintético: un dominio reservado (`example.com`) y un 555. */
+export const SYNTHETIC_CONTACT = {
+  emails: ["test@example.com"],
+  phones: ["5550000000"],
+}
+
+/** Un vuelo de Get Booking, con los campos vistos en CERT (`gestion-de-reserva` en el wiki). */
+export interface BookedFlight {
+  itemId?: string
+  airlineCode?: string
+  flightNumber?: number
+  fromAirportCode?: string
+  toAirportCode?: string
+  departureDate?: string
+  departureTime?: string
+  bookingClass?: string
+  flightStatusCode?: string
+  seats?: Array<{ number?: string; statusCode?: string }>
+}
+
+/**
+ * Los vuelos de una reserva. Get Booking trae el `Booking` en el primer nivel; Create y Cancel
+ * lo anidan en `booking`.
+ */
+export function bookedFlights(result: unknown): BookedFlight[] | undefined {
+  if (typeof result !== "object" || result === null) return undefined
+  const record = result as {
+    flights?: unknown
+    booking?: { flights?: unknown }
+  }
+  const flights = record.flights ?? record.booking?.flights
+  return Array.isArray(flights) ? (flights as BookedFlight[]) : undefined
+}
+
+/**
+ * La comprobación final: después de cancelar, Sabre omite las secciones vacías, así que
+ * "cancelada" es `flights` ausente o vacío. El PNR sigue existiendo. `isCancelable` no sirve
+ * para esto (era `false` antes del Cancel y `true` después).
+ */
+export function hasNoFlights(result: unknown): boolean {
+  return (bookedFlights(result)?.length ?? 0) === 0
+}

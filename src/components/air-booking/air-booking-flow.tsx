@@ -1,6 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import {
+  CleanupStep,
+  CreateStep,
+  ReadStep,
+} from "@/components/air-booking/booking-steps"
 import { RevalidateStep } from "@/components/air-booking/revalidate-step"
 import {
   type SearchSelection,
@@ -19,6 +24,8 @@ export function AirBookingFlow() {
   // Cuenta las revalidaciones: cada una vacía el panel de asientos.
   const [revalidation, setRevalidation] = useState(0)
   const [seatPlan, setSeatPlan] = useState<SeatPlan>()
+  const [confirmationId, setConfirmationId] = useState<string>()
+  const [cancelled, setCancelled] = useState(false)
 
   const revalidate = (next: ChosenItinerary | undefined) => {
     setRevalidated(next)
@@ -28,6 +35,10 @@ export function AirBookingFlow() {
   const select = (next: SearchSelection | undefined) => {
     setSelection(next)
     revalidate(undefined)
+  }
+  const created = (next: string | undefined) => {
+    setConfirmationId(next)
+    setCancelled(false)
   }
 
   return (
@@ -44,6 +55,36 @@ export function AirBookingFlow() {
         revalidated={revalidated}
         plan={seatPlan}
         onPlan={setSeatPlan}
+      />
+      <CreateStep
+        revalidated={revalidated}
+        travelers={Number(selection?.query.adults ?? 1)}
+        seatPlan={seatPlan}
+        onCreated={created}
+      />
+      <ReadStep
+        key={`leer-${confirmationId}`}
+        confirmationId={confirmationId}
+        waitingFor={
+          confirmationId === undefined ? "Reserva en el paso 4." : undefined
+        }
+      />
+      <CleanupStep
+        key={`limpiar-${confirmationId}`}
+        confirmationId={confirmationId}
+        onCancelled={setCancelled}
+      />
+      <ReadStep
+        key={`comprobar-${confirmationId}-${cancelled}`}
+        final
+        confirmationId={confirmationId}
+        waitingFor={
+          confirmationId === undefined
+            ? "Reserva en el paso 4."
+            : !cancelled
+              ? "Limpia la reserva antes de comprobar."
+              : undefined
+        }
       />
     </>
   )
