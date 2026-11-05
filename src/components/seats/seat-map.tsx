@@ -5,6 +5,7 @@ import type {
   SeatSegmentRs,
 } from "sabre-client"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -17,11 +18,22 @@ import {
 /**
  * El mapa de asientos de `air.getSeats` como una tabla simple: una por cabina, filas por
  * número de fila y columnas por letra. Cada celda trae el `occupationStatusCode` tal cual
- * (PADIS 9865) y `$` si el asiento tiene precio. Sin elegir asiento: eso es F3.3.
+ * (PADIS 9865) y `$` si el asiento tiene precio.
+ *
+ * Con `onPick` (F3.3), los asientos libres se pueden elegir: uno por segmento, y `picked` dice
+ * cuál está elegido en cada uno (`segmentRef` → número de asiento).
  *
  * En CERT el estado no refleja la ocupación real (Q-071, `get-seats` en el wiki).
  */
-export function SeatMapView({ result }: { result: unknown }) {
+export function SeatMapView({
+  result,
+  picked,
+  onPick,
+}: {
+  result: unknown
+  picked?: Record<string, string>
+  onPick?: (segmentRef: string, seat: string) => void
+}) {
   const response = (result as GetSeatsResponse | undefined)?.response
   if (response === undefined || response.seatMaps.length === 0) return null
 
@@ -32,6 +44,7 @@ export function SeatMapView({ result }: { result: unknown }) {
         <code>F</code> libre, <code>O</code> ocupado). <code>$</code>: con
         precio. <code>—</code>: no existe. En CERT el estado no refleja la
         ocupación real.
+        {onPick !== undefined && " Clic en un asiento libre para elegirlo."}
       </p>
       {response.seatMaps.map((map) => {
         const segment = response.segments.find((s) => s.id === map.segmentRef)
@@ -49,6 +62,12 @@ export function SeatMapView({ result }: { result: unknown }) {
                 // biome-ignore lint/suspicious/noArrayIndexKey: ver arriba
                 key={index}
                 cabin={cabin}
+                picked={picked?.[map.segmentRef]}
+                onPick={
+                  onPick === undefined
+                    ? undefined
+                    : (seat) => onPick(map.segmentRef, seat)
+                }
               />
             ))}
           </section>
@@ -71,7 +90,15 @@ function segmentLabel(segment: SeatSegmentRs | undefined, ref: string) {
   return `${bookingAirlineCode} ${bookingFlightNumber} ${departureAirportCode}→${arrivalAirportCode} ${departureDate} · clase ${bookingClassCode}`
 }
 
-function CabinTable({ cabin }: { cabin: SeatCabinCompartment }) {
+function CabinTable({
+  cabin,
+  picked,
+  onPick,
+}: {
+  cabin: SeatCabinCompartment
+  picked?: string
+  onPick?: (seat: string) => void
+}) {
   const rows = cabin.seatRows ?? []
   const columns =
     cabin.cabinLayout?.columns.map((column) => column.id) ??
@@ -121,9 +148,19 @@ function CabinTable({ cabin }: { cabin: SeatCabinCompartment }) {
                     </Badge>
                   )}
                 </TableCell>
-                {columns.map((column) => (
-                  <SeatCell key={column} seat={seats.get(column)} />
-                ))}
+                {columns.map((column) => {
+                  const number = `${row.row}${column}`
+                  return (
+                    <SeatCell
+                      key={column}
+                      seat={seats.get(column)}
+                      picked={picked === number}
+                      onPick={
+                        onPick === undefined ? undefined : () => onPick(number)
+                      }
+                    />
+                  )
+                })}
               </TableRow>
             )
           })}
@@ -133,7 +170,15 @@ function CabinTable({ cabin }: { cabin: SeatCabinCompartment }) {
   )
 }
 
-function SeatCell({ seat }: { seat: Seat | undefined }) {
+function SeatCell({
+  seat,
+  picked = false,
+  onPick,
+}: {
+  seat: Seat | undefined
+  picked?: boolean
+  onPick?: () => void
+}) {
   if (seat === undefined) {
     return (
       <TableCell className="text-muted-foreground text-center font-mono text-xs">
@@ -146,6 +191,14 @@ function SeatCell({ seat }: { seat: Seat | undefined }) {
   const title = (seat.characteristics ?? [])
     .map((c) => c.description ?? c.code)
     .join(", ")
+  const label = (
+    <>
+      {status}
+      {priced && "$"}
+      {seat.isOperative === false && "!"}
+    </>
+  )
+  const free = status === "F" && seat.isOperative !== false
   return (
     <TableCell
       title={title}
@@ -155,9 +208,19 @@ function SeatCell({ seat }: { seat: Seat | undefined }) {
           : "bg-muted text-muted-foreground text-center font-mono text-xs"
       }
     >
-      {status}
-      {priced && "$"}
-      {seat.isOperative === false && "!"}
+      {onPick !== undefined && free ? (
+        <Button
+          size="xs"
+          variant={picked ? "default" : "ghost"}
+          aria-pressed={picked}
+          className="font-mono"
+          onClick={onPick}
+        >
+          {label}
+        </Button>
+      ) : (
+        label
+      )}
     </TableCell>
   )
 }

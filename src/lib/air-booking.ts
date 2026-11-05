@@ -1,4 +1,9 @@
-import type { Itinerary, ItineraryGroup } from "sabre-client"
+import type {
+  BookingSeatSelection,
+  GetSeatsResponse,
+  Itinerary,
+  ItineraryGroup,
+} from "sabre-client"
 import { z } from "zod"
 
 /**
@@ -198,4 +203,20 @@ export function revalidatedItinerary(
     if (itinerary !== undefined) return chooseItinerary(group, itinerary)
   }
   return undefined
+}
+
+/**
+ * Lo que deja el paso de asientos (F3.3) para Create: los asientos elegidos (siempre para el
+ * primer viajero) y el mapa de donde salieron, para que `buildBookingFlightDetails` avise si
+ * alguno tiene precio. Sin asientos, el paso se saltó.
+ */
+export interface SeatPlan {
+  seats: BookingSeatSelection[]
+  availability?: GetSeatsResponse
+}
+
+/** `S1` → `1`: el número de vuelo que usan `segmentIndex` y `buildSeatAvailabilityRequest`. */
+export function segmentIndex(segmentRef: string): number | undefined {
+  const match = /^S(\d+)$/.exec(segmentRef)
+  return match === null ? undefined : Number(match[1])
 }
