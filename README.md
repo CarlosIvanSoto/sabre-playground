@@ -85,11 +85,11 @@ bandera, producción no aparece aunque haya credenciales.
 | `/auth` | 1. Autenticación: token v3 o v2, vencimiento, refresco y un 401 forzado. |
 | `/air-booking` | 2. Air Booking de punta a punta: BFM, revalidar, asientos, reservar, leer y cancelar. |
 | `/seats` | 3. Asientos de un PNR. `?pnrLocator=` prellena el localizador. |
-| `/booking` | 4. Reserva suelta: leer o cancelar por localizador. `?confirmationId=` prellena la lectura. |
+| `/booking` | 4. Reserva suelta: leer o cancelar por localizador, con `targetPcc` opcional. `?confirmationId=` y `?targetPcc=` prellenan la lectura. |
 | `/session` | 5. Sesión SOAP: abrir, ping y cerrar, con el contador de inactividad. |
 | `/queues`, `/queues/<PCC>/<cola>` | 6. Colas: `count`, `list`, `access`, `ignore`, `remove`, `place`, `exit` y `process`. |
 | `/queue-paragraph` | 7. Párrafo de cola: el parser, sin red. |
-| `/queue-desk` | Mesa de colas (ADR-025): sesión, conteo, navegación y reserva en una sola pantalla, sin scroll. Compone los flujos 4, 5 y 6; se arma en la Fase 9. |
+| `/queue-desk`, `/queue-desk/<PCC>` | Mesa de colas (ADR-025): sesión, conteo, navegación y reserva en una sola pantalla, sin scroll. Compone los flujos 4, 5 y 6; se arma en la Fase 9. Con `<PCC>`, o con el campo "PCC de trabajo", cuenta, entra, mueve y lee reservas en ese PCC sin abrir otra sesión. |
 | `/history` | Las llamadas de la sesión del navegador. |
 | `/dev/run-step` | Prueba de `runStep` (desarrollo). |
 

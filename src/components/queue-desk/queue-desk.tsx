@@ -15,7 +15,7 @@ import {
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { BookingSheet } from "@/components/queue-desk/desk-booking"
-import { DeskQueues } from "@/components/queue-desk/desk-queues"
+import { DeskPcc, DeskQueues } from "@/components/queue-desk/desk-queues"
 import { DeskScreenView } from "@/components/queue-desk/desk-screen"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
 import { MoveControl, RemoveControl } from "@/components/queue-desk/desk-write"
@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { FAKE_REST_REASON } from "@/lib/flows"
 import {
+  bookingHref,
   type DeskDestination,
   initialQueueDesk,
   type QueueDesk as QueueDeskState,
@@ -48,17 +49,22 @@ import type { StepRun } from "@/lib/step/types"
  * Al cambiar de entorno, la mesa se vuelve a montar: el conteo y el cursor de un entorno no
  * valen en otro.
  *
+ * El PCC de trabajo (F9.6) va en cada operación: `pcc` en `count`, `access` y el destino de
+ * `place`, y `targetPcc` en la hoja de reserva. La sesión SOAP es la misma. Al cambiarlo, la
+ * mesa sale de la cola si está dentro, borra el conteo y vuelve a contar; la URL pasa a
+ * `/queue-desk/<PCC>`.
+ *
  * Atajos (F9.5): I siguiente, M mover (foco en la cola destino), R sacar, E salir, B reserva,
  * ? la leyenda. Solo con el foco fuera de los campos y sin una hoja o un popover abiertos;
  * cada atajo hace clic en su botón, así que respeta si está deshabilitado, y mover y sacar
  * siguen pidiendo confirmación.
  */
-export function QueueDesk() {
+export function QueueDesk({ initialPcc = "" }: { initialPcc?: string }) {
   const { environment } = useEnvironment()
-  return <Desk key={environment.id} />
+  return <Desk key={environment.id} initialPcc={initialPcc} />
 }
 
-function Desk() {
+function Desk({ initialPcc }: { initialPcc: string }) {
   const { environment } = useEnvironment()
   const { status, error, refresh } = useSessionStatus()
   // Producción: el desbloqueo de `remove` y `place`, como en el flujo 6. Se pierde al recargar
@@ -69,9 +75,10 @@ function Desk() {
   // esas.
   const [since] = useState(() => new Date().toISOString())
   const [desk, dispatch] = useReducer(queueDeskReducer, undefined, () =>
-    initialQueueDesk()
+    initialQueueDesk(initialPcc)
   )
   const open = status?.open === true
+  const sessionPcc = status?.open ? status.pcc : ""
   const place: SessionPlace = status?.open ? status.queueState : "closed"
   const allowed = stepsFor(place)
   const reason = (panel: QueuePanel) =>
@@ -90,6 +97,11 @@ function Desk() {
     exitStep.pending ||
     placeStep.pending ||
     removeStep.pending
+
+  // `/queue-desk/<PCC de la sesión>` es el PCC de la sesión: se normaliza a vacío.
+  useEffect(() => {
+    dispatch({ type: "sessionPcc", pcc: sessionPcc })
+  }, [sessionPcc])
 
   // Una sesión cerrada o vencida no tiene cursor.
   useEffect(() => {
@@ -153,17 +165,43 @@ function Desk() {
       void refresh()
     }
 
-  const count = () =>
-    countStep.execute({ pcc: "" }, (run) => {
-      dispatch({ type: "counted", run })
+  const countIn = (pcc: string) =>
+    countStep.execute({ pcc }, (run) => {
+      dispatch({ type: "counted", pcc, run })
       void refresh()
     })
+  const count = () => countIn(desk.pcc)
+
+  /** Cambiar el PCC de trabajo: `exit` antes si el cursor está en una cola, y contar de nuevo. */
+  const changePcc = (pcc: string) => {
+    const apply = () => {
+      dispatch({ type: "pcc", pcc })
+      window.history.replaceState(
+        null,
+        "",
+        pcc === "" ? "/queue-desk" : `/queue-desk/${pcc}`
+      )
+      if (open) countIn(pcc)
+    }
+    if (place === "inside" || place === "unknown") {
+      exitStep.execute({}, (run) => {
+        moved("exit", "queue.exit")(run)
+        // Si `exit` falla, el cursor sigue en la cola del PCC anterior: no se cambia.
+        if (run.enabled && run.step.ok) apply()
+      })
+    } else {
+      apply()
+    }
+  }
 
   /** Un clic en una cola: `access`, con `exit` antes si el cursor está en otra o en unknown. */
   const enter = (queue: string) => {
     dispatch({ type: "select", queue })
     const access = () =>
-      accessStep.execute({ queue, pcc: "" }, moved("access", "queue.access"))
+      accessStep.execute(
+        { queue, pcc: desk.pcc },
+        moved("access", "queue.access")
+      )
     if (place === "inside" || place === "unknown") {
       exitStep.execute({}, (run) => {
         moved("exit", "queue.exit")(run)
@@ -197,7 +235,11 @@ function Desk() {
     const locator = desk.journey.current
     if (locator === undefined) return
     dispatch({ type: "booking", locator })
-    bookingStep.execute({ confirmationId: locator, surname: "" })
+    bookingStep.execute({
+      confirmationId: locator,
+      surname: "",
+      targetPcc: desk.pcc,
+    })
   }
   const removeControl = (
     <RemoveControl
@@ -228,7 +270,7 @@ function Desk() {
       />
       <div className="grid min-h-0 flex-1 grid-cols-[14rem_minmax(0,1fr)_16rem] divide-x">
         <DeskColumn
-          title="Colas"
+          title={desk.pcc === "" ? "Colas" : `Colas · ${desk.pcc}`}
           scroll
           actions={
             <Button
@@ -245,14 +287,23 @@ function Desk() {
             </Button>
           }
         >
-          <DeskQueues
-            count={desk.count}
-            failure={desk.countFailure}
-            active={inside ? desk.journey.queue : undefined}
-            disabledReason={enterReason}
-            pending={moving}
-            onEnter={enter}
-          />
+          <div className="flex flex-col gap-3">
+            <DeskPcc
+              key={desk.pcc}
+              pcc={desk.pcc}
+              sessionPcc={sessionPcc}
+              disabled={moving || countStep.pending}
+              onChange={changePcc}
+            />
+            <DeskQueues
+              count={desk.count}
+              failure={desk.countFailure}
+              active={inside ? desk.journey.queue : undefined}
+              disabledReason={enterReason}
+              pending={moving}
+              onEnter={enter}
+            />
+          </div>
         </DeskColumn>
         <DeskColumn title={<ScreenTitle desk={desk} inside={inside} />}>
           <DeskScreenView key={desk.screen?.seq ?? 0} screen={desk.screen} />
@@ -285,11 +336,13 @@ function Desk() {
                 reason={writeReason}
                 pending={moving}
                 recent={desk.recent}
+                pcc={desk.pcc}
+                sessionPcc={sessionPcc}
                 onConfirm={(to) =>
                   placeStep.execute(
                     {
                       queue: to.queue,
-                      pcc: "",
+                      pcc: to.pcc,
                       instructionCode: to.instructionCode,
                       locators: "",
                       unlock,
@@ -315,7 +368,7 @@ function Desk() {
               />
               {bookingReason === undefined ? (
                 <Link
-                  href={`/booking?confirmationId=${desk.journey.current}`}
+                  href={bookingHref(desk.journey.current ?? "", desk.pcc)}
                   target="_blank"
                   rel="noopener"
                   className={buttonVariants({
@@ -349,6 +402,7 @@ function Desk() {
       />
       <BookingSheet
         locator={desk.booking}
+        pcc={desk.pcc}
         run={bookingStep.run}
         pending={bookingStep.pending}
         onClose={() => dispatch({ type: "booking" })}

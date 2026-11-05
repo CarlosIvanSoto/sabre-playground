@@ -19,7 +19,7 @@ import { Confirm } from "@/components/queue-desk/desk-write"
 import { RawBody } from "@/components/step/raw-body"
 import { useStep } from "@/components/step/use-step"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { buttonVariants } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Sheet,
   SheetContent,
@@ -29,13 +29,16 @@ import {
 } from "@/components/ui/sheet"
 import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { failureOf } from "@/lib/queue-desk"
+import { bookingHref, failureOf } from "@/lib/queue-desk"
 import type { StepRun } from "@/lib/step/types"
 
 /**
  * La hoja de reserva de la mesa (F9.4, ADR-025): `booking.get` del PNR en pantalla, por REST
  * y sin la sesión SOAP, con *Resultado*, *Crudo* y *Error*, y los enlaces a la reserva en otra
  * pestaña (`/booking?confirmationId=`) y al mapa de asientos (flujo 3).
+ *
+ * Con un PCC de trabajo (F9.6), `get` y `cancel` lo mandan como `targetPcc`, y el mapa de
+ * asientos queda deshabilitado: `byPnrLocator` no tiene `targetPcc` (ADR-017).
  *
  * Cancelar desde la hoja (decisión del usuario, 2026-11-05):
  * - Solo fuera de producción. En producción el botón sale deshabilitado con la razón, y la
@@ -47,6 +50,7 @@ import type { StepRun } from "@/lib/step/types"
  */
 export function BookingSheet({
   locator,
+  pcc,
   run,
   pending,
   onClose,
@@ -54,6 +58,8 @@ export function BookingSheet({
 }: {
   /** El localizador abierto; sin él, la hoja está cerrada. */
   locator?: string
+  /** El PCC de trabajo: el `targetPcc`. Vacío es el de la sesión. */
+  pcc: string
   /** El `booking.get` que corrió la mesa al abrir la hoja. */
   run?: StepRun
   pending: boolean
@@ -75,6 +81,7 @@ export function BookingSheet({
           <SheetBody
             key={locator}
             locator={locator}
+            pcc={pcc}
             run={run}
             pending={pending}
             removeFromQueue={removeFromQueue}
@@ -87,11 +94,13 @@ export function BookingSheet({
 
 function SheetBody({
   locator,
+  pcc,
   run,
   pending,
   removeFromQueue,
 }: {
   locator: string
+  pcc: string
   run?: StepRun
   pending: boolean
   removeFromQueue?: ReactNode
@@ -118,10 +127,16 @@ function SheetBody({
         </SheetTitle>
         <SheetDescription>
           <code>booking.get</code> por REST, sin la sesión SOAP de la cola.
+          {pcc !== "" && (
+            <>
+              {" "}
+              Con <code>targetPcc</code> {pcc}.
+            </>
+          )}
         </SheetDescription>
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/booking?confirmationId=${locator}`}
+            href={bookingHref(locator, pcc)}
             target="_blank"
             rel="noopener"
             className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -129,16 +144,31 @@ function SheetBody({
             <ExternalLink />
             En pestaña
           </Link>
-          <Link
-            href={`/seats?pnrLocator=${locator}`}
-            target="_blank"
-            rel="noopener"
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            <Armchair />
-            Mapa de asientos
-          </Link>
+          {pcc === "" ? (
+            <Link
+              href={`/seats?pnrLocator=${locator}`}
+              target="_blank"
+              rel="noopener"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Armchair />
+              Mapa de asientos
+            </Link>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              title={SEATS_OTHER_PCC}
+            >
+              <Armchair />
+              Mapa de asientos
+            </Button>
+          )}
         </div>
+        {pcc !== "" && (
+          <p className="text-muted-foreground text-xs">{SEATS_OTHER_PCC}</p>
+        )}
       </SheetHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <StepTabs run={run} pending={pending} name={`booking-${locator}`} />
@@ -152,13 +182,20 @@ function SheetBody({
               side="top"
               disabled={cancel.pending || cancelReason !== undefined}
               title={`Cancelar ${locator} (irreversible)`}
-              summary={`Se cancelan todos los segmentos de ${locator} en ${environment.label} (cancelAll). No se puede deshacer, y el PNR sigue en la cola.`}
+              summary={`Se cancelan todos los segmentos de ${locator} en ${environment.label}${pcc === "" ? "" : `, PCC ${pcc}`} (cancelAll). No se puede deshacer, y el PNR sigue en la cola.`}
               onConfirm={() =>
-                cancel.execute({ confirmationId: locator }, (result) => {
-                  if (failureOf(result) === undefined) {
-                    verify.execute({ confirmationId: locator, surname: "" })
+                cancel.execute(
+                  { confirmationId: locator, targetPcc: pcc },
+                  (result) => {
+                    if (failureOf(result) === undefined) {
+                      verify.execute({
+                        confirmationId: locator,
+                        surname: "",
+                        targetPcc: pcc,
+                      })
+                    }
                   }
-                })
+                )
               }
             />
           )}
@@ -210,6 +247,10 @@ function SheetBody({
     </>
   )
 }
+
+/** Por qué el mapa de asientos no se ofrece con otro PCC. */
+const SEATS_OTHER_PCC =
+  "Mapa de asientos: byPnrLocator no tiene targetPcc y solo lee PNR del PCC de auth (ADR-017)."
 
 type Tab = "result" | "raw" | "error"
 

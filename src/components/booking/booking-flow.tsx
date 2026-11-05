@@ -1,8 +1,12 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useState } from "react"
-import { Controller, useForm } from "react-hook-form"
+import { type ComponentProps, useState } from "react"
+import {
+  Controller,
+  type FieldError as FieldErrorType,
+  useForm,
+} from "react-hook-form"
 import { cancelBooking, getBooking } from "@/app/(console)/booking/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { StepPanel } from "@/components/step/step-panel"
@@ -40,14 +44,20 @@ import {
  */
 export function BookingFlow({
   initialConfirmationId,
+  initialTargetPcc,
 }: {
   /** De `?confirmationId=`: prellena `booking.get`. */
   initialConfirmationId?: string
+  /** De `?targetPcc=`: prellena el PCC de `booking.get`. */
+  initialTargetPcc?: string
 }) {
   const { environment } = useEnvironment()
   return (
     <>
-      <BookingGetStep initialConfirmationId={initialConfirmationId} />
+      <BookingGetStep
+        initialConfirmationId={initialConfirmationId}
+        initialTargetPcc={initialTargetPcc}
+      />
       {!environment.readOnly && <BookingCancelStep />}
     </>
   )
@@ -55,8 +65,10 @@ export function BookingFlow({
 
 function BookingGetStep({
   initialConfirmationId,
+  initialTargetPcc,
 }: {
   initialConfirmationId?: string
+  initialTargetPcc?: string
 }) {
   const { run, pending, execute } = useStep("booking.get", getBooking)
   const form = useForm<BookingGetInput>({
@@ -64,6 +76,7 @@ function BookingGetStep({
     defaultValues: {
       confirmationId: initialConfirmationId ?? MISSING_LOCATOR,
       surname: "",
+      targetPcc: initialTargetPcc ?? "",
     },
   })
   const errors = form.formState.errors
@@ -109,6 +122,11 @@ function BookingGetStep({
             </FieldDescription>
             <FieldError errors={[errors.surname]} />
           </Field>
+          <TargetPccField
+            id="get-targetPcc"
+            error={errors.targetPcc}
+            {...form.register("targetPcc")}
+          />
           <Button type="submit" disabled={pending}>
             Correr
           </Button>
@@ -123,7 +141,11 @@ function BookingCancelStep() {
   const { run, pending, execute } = useStep("booking.cancel", cancelBooking)
   const form = useForm<BookingCancelInput>({
     resolver: zodResolver(bookingCancelSchema),
-    defaultValues: { confirmationId: MISSING_LOCATOR, retrieveBooking: false },
+    defaultValues: {
+      confirmationId: MISSING_LOCATOR,
+      targetPcc: "",
+      retrieveBooking: false,
+    },
   })
   const errors = form.formState.errors
   // Lo validado, esperando la confirmación del diálogo.
@@ -161,6 +183,11 @@ function BookingCancelStep() {
             />
             <FieldError errors={[errors.confirmationId]} />
           </Field>
+          <TargetPccField
+            id="cancel-targetPcc"
+            error={errors.targetPcc}
+            {...form.register("targetPcc")}
+          />
           <Controller
             control={form.control}
             name="retrieveBooking"
@@ -194,7 +221,10 @@ function BookingCancelStep() {
                   <code className="font-mono">
                     {pendingInput?.confirmationId.trim().toUpperCase()}
                   </code>{" "}
-                  en {environment.label}. No se puede deshacer.
+                  en {environment.label}
+                  {pendingInput?.targetPcc?.trim() &&
+                    `, PCC ${pendingInput.targetPcc.trim().toUpperCase()}`}
+                  . No se puede deshacer.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -208,5 +238,29 @@ function BookingCancelStep() {
         </form>
       }
     />
+  )
+}
+
+/** `targetPcc` opcional: el cambio de contexto de Booking Management. */
+function TargetPccField({
+  id,
+  error,
+  ...input
+}: { id: string; error?: FieldErrorType } & ComponentProps<"input">) {
+  return (
+    <Field data-invalid={error !== undefined}>
+      <FieldLabel htmlFor={id}>PCC (opcional)</FieldLabel>
+      <Input
+        id={id}
+        className="font-mono uppercase"
+        maxLength={4}
+        aria-invalid={error !== undefined}
+        {...input}
+      />
+      <FieldDescription>
+        <code>targetPcc</code>. Vacío es el PCC de auth.
+      </FieldDescription>
+      <FieldError errors={[error]} />
+    </Field>
   )
 }

@@ -13,8 +13,8 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import type { DeskDestination } from "@/lib/queue-desk"
-import { instructionCode, parseQueueRef } from "@/lib/queues"
+import { type DeskDestination, workingPcc } from "@/lib/queue-desk"
+import { instructionCode, PCC_PATTERN, parseQueueRef } from "@/lib/queues"
 
 /**
  * Las escrituras de la mesa (F9.3): mover el PNR en pantalla a otra cola (`place` dentro de la
@@ -33,46 +33,63 @@ interface WriteProps {
   pending: boolean
 }
 
-/** Mover: cola de destino y PIC obligatorio, sin default (ADR-018). */
+/**
+ * Mover: cola de destino, PCC y PIC obligatorio, sin default (ADR-018). El PCC vacío es el de
+ * trabajo (F9.6): el placeholder lo muestra.
+ */
 export function MoveControl({
   locator,
   from,
   reason,
   pending,
   recent,
+  pcc,
+  sessionPcc,
   onConfirm,
 }: WriteProps & {
   recent: DeskDestination[]
+  /** El PCC de trabajo; vacío es el de la sesión. */
+  pcc: string
+  /** El PCC de la sesión, para mostrarlo y normalizar. */
+  sessionPcc: string
   onConfirm: (to: DeskDestination) => void
 }) {
   const [queue, setQueue] = useState("")
+  const [pccText, setPccText] = useState("")
   const [pic, setPic] = useState("")
   const ref = parseQueueRef(queue)
   const code = instructionCode.safeParse(pic)
-  const sameQueue = ref !== undefined && String(ref) === from
+  const typedPcc = pccText.trim().toUpperCase()
+  const toPcc = typedPcc === "" ? pcc : workingPcc(typedPcc, sessionPcc)
+  const sameQueue = ref !== undefined && String(ref) === from && toPcc === pcc
   const invalid =
     queue.trim() === ""
       ? "Falta la cola de destino."
       : ref === undefined
         ? "Cola: 0–511 o un nombre."
-        : sameQueue
-          ? "El destino es la misma cola."
-          : pic.trim() === ""
-            ? "Falta el PIC: es obligatorio y no tiene default."
-            : !code.success
-              ? "PIC: 0–191 o 200–254."
-              : undefined
+        : typedPcc !== "" && !PCC_PATTERN.test(typedPcc)
+          ? "PCC: 3 o 4 letras o dígitos."
+          : sameQueue
+            ? "El destino es la misma cola."
+            : pic.trim() === ""
+              ? "Falta el PIC: es obligatorio y no tiene default."
+              : !code.success
+                ? "PIC: 0–191 o 200–254."
+                : undefined
   const to: DeskDestination | undefined =
     invalid === undefined && ref !== undefined && code.success
       ? {
           queue: typeof ref === "number" ? String(ref) : ref.name,
+          pcc: toPcc,
           instructionCode: String(code.data),
         }
       : undefined
+  const shown = (value: string) => (value === "" ? sessionPcc : value)
+  const elsewhere = to !== undefined && to.pcc !== pcc
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_4rem_3.5rem] gap-2">
         <div className="flex flex-col gap-1">
           <Label htmlFor="desk-move-queue" className="text-xs">
             <kbd className="font-mono opacity-70">M</kbd> Cola destino
@@ -82,6 +99,20 @@ export function MoveControl({
             className="h-8 font-mono uppercase"
             value={queue}
             onChange={(event) => setQueue(event.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="desk-move-pcc" className="text-xs">
+            PCC
+          </Label>
+          <Input
+            id="desk-move-pcc"
+            className="h-8 font-mono uppercase"
+            maxLength={4}
+            placeholder={shown(pcc)}
+            title="Vacío: el PCC de trabajo"
+            value={pccText}
+            onChange={(event) => setPccText(event.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -102,7 +133,7 @@ export function MoveControl({
           <legend className="sr-only">Destinos recientes</legend>
           {recent.map((item) => (
             <Badge
-              key={`${item.queue}-${item.instructionCode}`}
+              key={`${item.queue}-${item.pcc}-${item.instructionCode}`}
               variant="outline"
               className="cursor-pointer font-mono"
               render={
@@ -110,12 +141,15 @@ export function MoveControl({
                   type="button"
                   onClick={() => {
                     setQueue(item.queue)
+                    setPccText(item.pcc === pcc ? "" : shown(item.pcc))
                     setPic(item.instructionCode)
                   }}
                 />
               }
             >
-              {item.queue} · PIC {item.instructionCode}
+              {item.queue}
+              {item.pcc !== pcc && ` · ${shown(item.pcc)}`} · PIC{" "}
+              {item.instructionCode}
             </Badge>
           ))}
         </fieldset>
@@ -128,7 +162,7 @@ export function MoveControl({
         summary={
           to === undefined
             ? ""
-            : `Mover ${locator ?? "el PNR"} de la ${from} a la ${to.queue}, PIC ${to.instructionCode}. Sale de la ${from} y la cola sigue con el siguiente.`
+            : `Mover ${locator ?? "el PNR"} de la ${from} a la ${to.queue}${elsewhere ? ` de ${shown(to.pcc)}` : ""}, PIC ${to.instructionCode}. Sale de la ${from} y la cola sigue con el siguiente.`
         }
         onConfirm={() => to !== undefined && onConfirm(to)}
       />
