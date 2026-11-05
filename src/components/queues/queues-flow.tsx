@@ -10,6 +10,7 @@ import {
   useWatch,
 } from "react-hook-form"
 import {
+  fakeQueues,
   queueAccess,
   queueCount,
   queueExit,
@@ -18,6 +19,7 @@ import {
   queuePlace,
   queueProcess,
   queueRemove,
+  resetFakeQueues,
 } from "@/app/(console)/queues/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { QueueCountView, QueueStepView } from "@/components/queues/queue-views"
@@ -160,6 +162,7 @@ export function QueuesFlow({
       <SessionBar status={status} error={error}>
         {open && <QueueCursor journey={journey} />}
       </SessionBar>
+      {environment.id === "fake" && <FakeQueuesStep open={open} />}
       <OpenStep open={open} onDone={() => void refresh()} />
       {environment.readOnly && (
         <UnlockCard unlocked={unlocked} onChange={setUnlocked} />
@@ -187,6 +190,55 @@ export function QueuesFlow({
       />
       <CloseStep open={open} onDone={() => void refresh()} />
     </>
+  )
+}
+
+/**
+ * Solo en fake: qué hay en las colas de `createQueueFake` y volver a armarlas desde
+ * `queueFixtures` después de un `remove` o un `place`.
+ */
+function FakeQueuesStep({ open }: { open: boolean }) {
+  const view = useStep("fake.locators", fakeQueues)
+  const reset = useStep("fake.reset", resetFakeQueues)
+  const latest = reset.run ?? view.run
+  return (
+    <StepPanel
+      title="Colas del fake"
+      description={
+        <>
+          Sin red ni credenciales: <code>createQueueFake</code> de{" "}
+          <code>sabre-client/testing</code>, sembrado con{" "}
+          <code>queueFixtures</code> (respuestas anonimizadas de producción). La
+          cola 9 tiene los 4 PNR de <code>walk</code>, la 50 está vacía y{" "}
+          <code>AAAAAE</code> queda fuera de las colas, para <code>place</code>.
+        </>
+      }
+      run={latest}
+      pending={view.pending || reset.pending}
+      form={
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="outline"
+            disabled={view.pending}
+            onClick={() => view.execute({})}
+          >
+            Ver colas del fake
+          </Button>
+          <Button
+            variant="outline"
+            disabled={reset.pending || open}
+            onClick={() => reset.execute({})}
+          >
+            Reiniciar el fake
+          </Button>
+          {open && (
+            <FieldDescription>
+              Para reiniciar, primero cierra la sesión.
+            </FieldDescription>
+          )}
+        </div>
+      }
+    />
   )
 }
 
