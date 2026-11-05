@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NEXT_MANUAL_SIG_HANDLE=true NEXT_EXIT_TIMEOUT_MS=4000 next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "NEXT_MANUAL_SIG_HANDLE=true next start",
     "lint": "biome check",
     "format": "biome format --write"
   },

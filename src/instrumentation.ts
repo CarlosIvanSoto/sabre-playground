@@ -1,6 +1,7 @@
 /**
  * Valida la configuración por entorno al arrancar el servidor y deja un resumen en consola,
  * con nombres de variables y nunca con sus valores. Nada falla: lo que falta queda deshabilitado.
+ * También engancha el cierre de las sesiones SOAP al apagar el servidor.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return
@@ -13,4 +14,8 @@ export async function register() {
       : `deshabilitado: ${environment.reason}`
     console.info(`[sabre-playground] ${environment.label}${mode}: ${detail}`)
   }
+
+  // Al apagar el servidor, cerrar las sesiones SOAP que queden en el registro (F4.1).
+  const { hookShutdown } = await import("@/server/sabre/sessions")
+  hookShutdown()
 }
