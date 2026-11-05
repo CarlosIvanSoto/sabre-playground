@@ -8,7 +8,7 @@ import {
   TriangleAlert,
 } from "lucide-react"
 import { type ReactNode, useState } from "react"
-import type { QueueParagraph, QueueStep } from "sabre-client"
+import type { QueueItem, QueueParagraph, QueueStep } from "sabre-client"
 import { parseParagraph } from "@/app/(console)/queue-paragraph/actions"
 import { JsonTree } from "@/components/custom/json-tree"
 import { RawBody } from "@/components/step/raw-body"
@@ -85,18 +85,13 @@ export function DeskScreenView({ screen }: { screen?: DeskScreen }) {
   return (
     <>
       {notes}
-      <ItemTabs screen={screen} paragraph={step.item.paragraph} />
+      <ItemTabs screen={screen} item={step.item} />
     </>
   )
 }
 
-function ItemTabs({
-  screen,
-  paragraph,
-}: {
-  screen: DeskScreen
-  paragraph: readonly string[]
-}) {
+function ItemTabs({ screen, item }: { screen: DeskScreen; item: QueueItem }) {
+  const { paragraph } = item
   const [tab, setTab] = useState<Tab>("paragraph")
   const parse = useStep("parseQueueParagraph", parseParagraph)
   const raw = screen.run.enabled ? screen.run.step.raw : undefined
@@ -133,7 +128,7 @@ function ItemTabs({
         ) : failureOf(parse.run) !== undefined || !parse.run.enabled ? (
           <p className="text-destructive">{failureOf(parse.run)}</p>
         ) : (
-          <Parsed value={parse.run.step.result as QueueParagraph} />
+          <Parsed value={parse.run.step.result as QueueParagraph} item={item} />
         )}
       </TabsContent>
       <TabsContent value="raw" className="min-h-0 flex-1 overflow-auto">
@@ -147,10 +142,26 @@ function ItemTabs({
   )
 }
 
-/** Un resumen de lo que reconoció el parser, y debajo el resultado completo. */
-function Parsed({ value }: { value: QueueParagraph }) {
+/**
+ * Un resumen de lo que reconoció el parser, con la colocación que trae `access` (`placedAt` y
+ * `placedBy` del `QueueItem`, tal cual), y debajo el resultado completo del parser.
+ */
+function Parsed({ value, item }: { value: QueueParagraph; item: QueueItem }) {
   const received = value.receivedFrom
   const rows: [string, ReactNode][] = [
+    // De `access` (`QueueItem`), no del parser: tal cual, sin resolver el año (#96).
+    [
+      "Colocado",
+      [
+        item.placedAt,
+        item.placedBy &&
+          [item.placedBy.pseudoCityCode, item.placedBy.agentSine]
+            .filter(Boolean)
+            .join("*"),
+      ]
+        .filter(Boolean)
+        .join(" · ") || "—",
+    ],
     [
       "Avisos",
       value.messages.length === 0
