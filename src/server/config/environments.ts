@@ -177,19 +177,14 @@ function credentialsConfig(
           clientSecret: v.CLIENT_SECRET,
         }
   try {
-    // Sin `pcc` en la config: el PCC ya va en el username de las credenciales.
+    // Sin `pcc` en la config (`@deprecated` desde 0.4.1): el PCC ya va en el username de las
+    // credenciales. Tampoco `authVersion`: desde 0.4.1, `buildCredentials` lo pone en las
+    // credenciales y la config lo toma de ahí. Hay que ramificar igual: con la sobrecarga de
+    // unión, `BuiltCredentialsV2 | BuiltCredentialsV3` no se puede asignar a `SabreConfig`.
     const config: SabreConfig =
       options.authVersion === "v2"
-        ? {
-            environment,
-            authVersion: "v2",
-            credentials: buildCredentials(options),
-          }
-        : {
-            environment,
-            authVersion: "v3",
-            credentials: buildCredentials(options),
-          }
+        ? { environment, credentials: buildCredentials(options) }
+        : { environment, credentials: buildCredentials(options) }
     return { enabled: true, config, pcc: v.PCC.toUpperCase() }
   } catch (error) {
     // `buildCredentials` valida sin red y sus mensajes no repiten secretos.

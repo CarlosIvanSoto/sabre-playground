@@ -97,7 +97,6 @@ const FAKE_REST_REASON =
 function fakeLegacy(): SabreLegacy {
   clients.fake ??= new SabreLegacy({
     environment: "sandbox",
-    authVersion: "v2",
     credentials: buildCredentials({
       authVersion: "v2",
       user: "0000",
