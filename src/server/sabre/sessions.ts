@@ -6,6 +6,7 @@ import type { RequestOptions, SabreSession } from "sabre-client"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type { SessionStatus } from "@/lib/session"
 import type { StepRun } from "@/lib/step/types"
+import { getEnvironment } from "@/server/config/environments"
 import { getSabreLegacy } from "@/server/sabre/clients"
 import { isSabreSessionError } from "@/server/sabre/errors"
 import { runStep, type StepOptions } from "@/server/sabre/run-step"
@@ -47,6 +48,8 @@ interface Entry {
   session: SabreSession
   openedAt: Date
   keepAlive: boolean
+  /** PCC de la sesión: el default de las operaciones de cola. No es una credencial. */
+  pcc: string
 }
 
 interface Registry {
@@ -79,6 +82,13 @@ async function owner(create: boolean): Promise<string | undefined> {
     path: "/",
   })
   return id
+}
+
+/** El PCC del EPR del entorno. El fake usa `TEST` (`clients.ts`). */
+function sessionPcc(environment: ConsoleEnvironmentId): string {
+  if (environment === "fake") return "TEST"
+  const config = getEnvironment(environment)?.sabre
+  return config?.enabled ? config.pcc : ""
 }
 
 /** Si el error deja la sesión inservible del lado del SDK. */
@@ -149,6 +159,7 @@ function status(
     environment,
     openedAt: entry.openedAt.toISOString(),
     keepAlive: entry.keepAlive,
+    pcc: entry.pcc,
     idleMs: entry.session.idleMs,
     at: new Date().toISOString(),
     queueState: entry.session.queue.state,
@@ -202,6 +213,7 @@ export async function openRegisteredSession(
       session: opened,
       openedAt: new Date(),
       keepAlive,
+      pcc: sessionPcc(environment),
     })
   }
   return { enabled: true, step }

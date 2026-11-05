@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { EnvironmentBadge } from "@/components/environment/environment-badge"
 import { SessionTimer } from "@/components/session/session-timer"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -13,9 +14,12 @@ import type { SessionStatus } from "@/lib/session"
 export function SessionBar({
   status,
   error,
+  children,
 }: {
   status?: SessionStatus
   error?: string
+  /** Lo que el flujo agrega a la barra, p. ej. el cursor de la cola. */
+  children?: ReactNode
 }) {
   if (error !== undefined) {
     return (
@@ -58,6 +62,7 @@ export function SessionBar({
       ) : (
         <Badge variant="outline">cerrada</Badge>
       )}
+      {children}
     </div>
   )
 }
