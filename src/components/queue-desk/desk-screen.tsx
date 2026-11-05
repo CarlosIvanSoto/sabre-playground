@@ -1,6 +1,12 @@
 "use client"
 
-import { CircleAlert, Flag, LogOut } from "lucide-react"
+import {
+  CircleAlert,
+  CircleCheck,
+  Flag,
+  LogOut,
+  TriangleAlert,
+} from "lucide-react"
 import { type ReactNode, useState } from "react"
 import type { QueueParagraph, QueueStep } from "sabre-client"
 import { parseParagraph } from "@/app/(console)/queue-paragraph/actions"
@@ -45,6 +51,9 @@ export function DeskScreenView({ screen }: { screen?: DeskScreen }) {
       </Alert>
     )
   }
+  const notes = (
+    <WriteNotes note={screen.note} warnings={screen.run.step.warnings} />
+  )
   const step = screen.run.step.result as QueueStep | undefined
   if (step === undefined || typeof step !== "object" || !("done" in step)) {
     return (
@@ -59,18 +68,26 @@ export function DeskScreenView({ screen }: { screen?: DeskScreen }) {
   }
   if (step.done) {
     return (
-      <Alert>
-        <Flag />
-        <AlertTitle>
-          Fin de cola: <code>{step.reason}</code>
-        </AlertTitle>
-        <AlertDescription>
-          {step.message}. La sesión queda fuera de la cola.
-        </AlertDescription>
-      </Alert>
+      <>
+        {notes}
+        <Alert>
+          <Flag />
+          <AlertTitle>
+            Fin de cola: <code>{step.reason}</code>
+          </AlertTitle>
+          <AlertDescription>
+            {step.message}. La sesión queda fuera de la cola.
+          </AlertDescription>
+        </Alert>
+      </>
     )
   }
-  return <ItemTabs screen={screen} paragraph={step.item.paragraph} />
+  return (
+    <>
+      {notes}
+      <ItemTabs screen={screen} paragraph={step.item.paragraph} />
+    </>
+  )
 }
 
 function ItemTabs({
@@ -184,6 +201,64 @@ function Parsed({ value }: { value: QueueParagraph }) {
       <JsonTree value={value} filename="queue-paragraph.json" />
     </div>
   )
+}
+
+/**
+ * Lo que dejó la escritura que trajo este PNR (`place` o `remove`) y los `warnings` de la
+ * respuesta, tal cual. El de `place` dentro de una cola es el que sigue pendiente de capturar
+ * desde la Fase 4.
+ */
+function WriteNotes({
+  note,
+  warnings,
+}: {
+  note?: string
+  warnings?: unknown[]
+}) {
+  if (note === undefined && (warnings === undefined || warnings.length === 0)) {
+    return null
+  }
+  return (
+    <div className="mb-3 flex shrink-0 flex-col gap-2">
+      {note !== undefined && (
+        <Alert>
+          <CircleCheck />
+          <AlertTitle>{note}</AlertTitle>
+        </Alert>
+      )}
+      {warnings !== undefined && warnings.length > 0 && (
+        <Alert>
+          <TriangleAlert />
+          <AlertTitle>
+            {warnings.length === 1
+              ? "1 warning"
+              : `${warnings.length} warnings`}
+          </AlertTitle>
+          <AlertDescription>
+            <ul className="font-mono text-xs break-words">
+              {warnings.map((warning, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: la lista no cambia de orden
+                <li key={index}>{warningText(warning)}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
+}
+
+/** `CODE: mensaje` de un `SabreWarning` serializado, o el JSON si no tiene esa forma. */
+function warningText(warning: unknown): string {
+  if (typeof warning === "object" && warning !== null) {
+    const { code, message } = warning as { code?: unknown; message?: unknown }
+    if (typeof message === "string") {
+      return typeof code === "string" && code !== ""
+        ? `${code}: ${message}`
+        : message
+    }
+  }
+  return JSON.stringify(warning)
 }
 
 function Hint({ children }: { children: ReactNode }) {

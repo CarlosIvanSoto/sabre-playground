@@ -302,7 +302,7 @@ function Blocked({ reason, locked }: { reason?: string; locked?: boolean }) {
 }
 
 /** Producción: `remove` y `place` necesitan este desbloqueo explícito. */
-function UnlockCard({
+export function UnlockCard({
   unlocked,
   onChange,
 }: {
