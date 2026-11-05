@@ -3,6 +3,7 @@
 import { FlaskConicalIcon, HistoryIcon, TerminalIcon } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
 import {
   Sidebar,
@@ -17,12 +18,17 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { FLOWS } from "@/lib/flows"
+import { FLOWS, flowUnavailable } from "@/lib/flows"
 
-/** La navegación de la consola: los siete flujos, el historial y las páginas de desarrollo. */
+/**
+ * La navegación de la consola: los siete flujos, el historial y las páginas de desarrollo. Un
+ * flujo que no corre en el entorno elegido se ve atenuado, con la razón en el tooltip; su
+ * página explica por qué.
+ */
 export function AppSidebar() {
   const pathname = usePathname()
   const { entries } = useHistory()
+  const { environment } = useEnvironment()
 
   return (
     <Sidebar collapsible="icon">
@@ -52,20 +58,35 @@ export function AppSidebar() {
           <SidebarGroupLabel>Flujos</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {FLOWS.map((flow) => (
-                <SidebarMenuItem key={flow.slug}>
-                  <SidebarMenuButton
-                    tooltip={flow.title}
-                    isActive={pathname === `/${flow.slug}`}
-                    render={<Link href={`/${flow.slug}`} />}
-                  >
-                    <span className="text-muted-foreground w-4 shrink-0 text-center font-mono text-xs">
-                      {flow.number}
-                    </span>
-                    <span>{flow.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {FLOWS.map((flow) => {
+                const unavailable = flowUnavailable(flow, environment)
+                return (
+                  <SidebarMenuItem key={flow.slug}>
+                    <SidebarMenuButton
+                      tooltip={
+                        unavailable === undefined
+                          ? flow.title
+                          : `${flow.title}: ${unavailable}`
+                      }
+                      isActive={pathname.split("/")[1] === flow.slug}
+                      className={
+                        unavailable === undefined ? undefined : "opacity-50"
+                      }
+                      render={<Link href={`/${flow.slug}`} />}
+                    >
+                      <span className="text-muted-foreground w-4 shrink-0 text-center font-mono text-xs">
+                        {flow.number}
+                      </span>
+                      <span>{flow.title}</span>
+                      {unavailable !== undefined && (
+                        <span className="sr-only">
+                          (no corre en {environment.label})
+                        </span>
+                      )}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

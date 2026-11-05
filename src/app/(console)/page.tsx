@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { FlowAvailability } from "@/components/console/flow-availability"
 import {
   Card,
   CardDescription,
@@ -25,6 +26,7 @@ export default function Home() {
                 <CardDescription>Flujo {flow.number}</CardDescription>
                 <CardTitle>{flow.title}</CardTitle>
                 <CardDescription>{flow.description}</CardDescription>
+                <FlowAvailability flow={flow} />
               </CardHeader>
             </Card>
           </Link>
