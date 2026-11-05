@@ -35,6 +35,10 @@ export const SYNTHETIC = {
 
 type Kind = keyof typeof SYNTHETIC
 
+const SYNTHETIC_VALUES = new Set(
+  Object.values(SYNTHETIC).map((value) => value.toUpperCase())
+)
+
 /** Lo que la pasada estructural encontró: valor real → tipo. */
 type Learned = Map<string, Kind>
 
@@ -125,6 +129,9 @@ function learn(learned: Learned, kind: Kind, value: string) {
   const trimmed = value.trim()
   // Valores cortos ("M", "MR", "1") reemplazados por valor romperían todo el texto.
   if (trimmed.length < 3 || kind === "secret") return
+  // Un valor que ya es sintético, de cualquier tipo, no se aprende: en CERT el PNR puede traer
+  // `givenName: "TEST"`, y aprenderlo reemplazaría el `TEST` del apellido ya redactado.
+  if (SYNTHETIC_VALUES.has(trimmed.toUpperCase())) return
   if (trimmed === synthetic(kind, trimmed)) return
   learned.set(trimmed, kind)
 }
