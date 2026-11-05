@@ -1,5 +1,20 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Sesiones SOAP y apagado del servidor
+
+Las sesiones SOAP (`SabreSession`) viven en un registro en la memoria del servidor
+(`src/server/sabre/sessions.ts`), y al apagarlo (`SIGINT`, `SIGTERM`) se cierran todas, con
+un tope de 3 s. Por eso los scripts llevan variables de Next:
+
+- `NEXT_MANUAL_SIG_HANDLE=true` (en `pnpm dev` y `pnpm start`): sin ella, el cleanup de Next
+  sale con `process.exit` sin esperar los `SessionCloseRQ`, y las sesiones quedan vivas en
+  Sabre hasta que vencen (el límite es de 50 por PCC).
+- `NEXT_EXIT_TIMEOUT_MS=4000` (solo en `pnpm dev`): el proceso padre de `next dev` manda
+  `SIGKILL` al hijo a los 100 ms por defecto.
+
+Un `kill -9` no pasa por ahí: esas sesiones vencen solas. La sintaxis `VAR=valor comando` de
+los scripts es de shells POSIX (macOS, Linux).
+
 ## Getting Started
 
 First, run the development server:

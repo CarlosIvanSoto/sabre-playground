@@ -1,6 +1,6 @@
 import "server-only"
 
-import { SabreBusinessError, SabreError } from "sabre-client"
+import { SabreBusinessError, SabreError, SabreSessionError } from "sabre-client"
 
 /**
  * Guards de los errores del SDK que no dependen solo de `instanceof`. En `pnpm dev`, los
@@ -24,5 +24,14 @@ export function isSabreBusinessError(
   return (
     error instanceof SabreBusinessError ||
     (isSabreError(error) && error.name === "SabreBusinessError")
+  )
+}
+
+export function isSabreSessionError(
+  error: unknown
+): error is SabreSessionError {
+  return (
+    error instanceof SabreSessionError ||
+    (isSabreError(error) && error.name === "SabreSessionError")
   )
 }
