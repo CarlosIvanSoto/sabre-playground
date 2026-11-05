@@ -4,6 +4,7 @@ import { CircleAlert, Play } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { JsonTree } from "@/components/custom/json-tree"
 import { EnvironmentBadge } from "@/components/environment/environment-badge"
+import { CopyFinding } from "@/components/step/copy-finding"
 import { RawBody } from "@/components/step/raw-body"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -162,6 +163,7 @@ function StepOutput({
       name={name}
       environment={run.environment}
       resultView={resultView}
+      actions={<CopyFinding run={run} title={title} />}
     />
   )
 }
@@ -171,11 +173,14 @@ function StepTabs({
   name,
   environment,
   resultView,
+  actions,
 }: {
   step: StepResult
   name: string
   environment?: ConsoleEnvironmentId
   resultView?: (result: unknown) => ReactNode
+  /** Botones a la derecha del resumen: "Copiar como hallazgo". */
+  actions?: ReactNode
 }) {
   const issues =
     (step.error === undefined ? 0 : 1) +
@@ -192,7 +197,10 @@ function StepTabs({
 
   return (
     <div className="flex flex-col gap-3">
-      <StepSummary step={step} environment={environment} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StepSummary step={step} environment={environment} />
+        {actions}
+      </div>
       <Tabs value={tab} onValueChange={(value) => setTab(value as Tab)}>
         <TabsList>
           <TabsTrigger value="result">Resultado</TabsTrigger>
