@@ -163,11 +163,15 @@ export function RemoveControl({
   )
 }
 
-/** Un botón que abre un popover con el resumen; Enter (o el clic) confirma. */
-function Confirm({
+/**
+ * Un botón que abre un popover con el resumen; Enter (o el clic) confirma. Lo usan mover,
+ * sacar y cancelar la reserva desde la hoja.
+ */
+export function Confirm({
   label,
   method,
   variant = "default",
+  side = "left",
   disabled,
   title,
   summary,
@@ -175,7 +179,9 @@ function Confirm({
 }: {
   label: string
   method: string
-  variant?: "default" | "outline"
+  variant?: "default" | "outline" | "destructive"
+  /** Hacia dónde abre el popover. */
+  side?: "left" | "bottom" | "top"
   disabled: boolean
   title: string
   summary: string
@@ -197,7 +203,7 @@ function Confirm({
         {label}
         <code className="text-xs opacity-70">{method}</code>
       </PopoverTrigger>
-      <PopoverContent side="left" align="start" initialFocus={confirm}>
+      <PopoverContent side={side} align="start" initialFocus={confirm}>
         <PopoverHeader>
           <PopoverTitle>{title}</PopoverTitle>
           <PopoverDescription>{summary}</PopoverDescription>

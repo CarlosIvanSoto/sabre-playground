@@ -17,11 +17,16 @@ import { Input } from "@/components/ui/input"
 import { type SeatsByPnrInput, seatsByPnrSchema } from "@/lib/seats"
 
 /** Flujo 3: el mapa de asientos de un PNR existente, por localizador. */
-export function SeatsFlow() {
+export function SeatsFlow({
+  initialPnrLocator = "",
+}: {
+  /** De `?pnrLocator=`: prellena el formulario. */
+  initialPnrLocator?: string
+}) {
   const { run, pending, execute } = useStep("air.getSeats", getSeatsByPnr)
   const form = useForm<SeatsByPnrInput>({
     resolver: zodResolver(seatsByPnrSchema),
-    defaultValues: { pnrLocator: "" },
+    defaultValues: { pnrLocator: initialPnrLocator },
   })
   const error = form.formState.errors.pnrLocator
 

@@ -1,8 +1,9 @@
 "use client"
 
-import { HistoryIcon, RotateCwIcon } from "lucide-react"
+import { ExternalLink, HistoryIcon, RotateCwIcon } from "lucide-react"
 import Link from "next/link"
 import { type ReactNode, useEffect, useReducer, useState } from "react"
+import { getBooking } from "@/app/(console)/booking/actions"
 import {
   queueAccess,
   queueCount,
@@ -13,6 +14,7 @@ import {
 } from "@/app/(console)/queues/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
+import { BookingSheet } from "@/components/queue-desk/desk-booking"
 import { DeskQueues } from "@/components/queue-desk/desk-queues"
 import { DeskScreenView } from "@/components/queue-desk/desk-screen"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
@@ -21,7 +23,8 @@ import { UnlockCard } from "@/components/queues/queues-flow"
 import { useSessionStatus } from "@/components/session/use-session-status"
 import { useStep } from "@/components/step/use-step"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { FAKE_REST_REASON } from "@/lib/flows"
 import {
   type DeskDestination,
   initialQueueDesk,
@@ -43,8 +46,7 @@ import type { StepRun } from "@/lib/step/types"
  * cada llamada pasa por `useStep` y queda en el historial.
  *
  * Al cambiar de entorno, la mesa se vuelve a montar: el conteo y el cursor de un entorno no
- * valen en otro. La hoja de reserva llega en F9.4, y los atajos y la barra de actividad en
- * F9.5.
+ * valen en otro. Los atajos y la barra de actividad llegan en F9.5.
  */
 export function QueueDesk() {
   const { environment } = useEnvironment()
@@ -72,6 +74,7 @@ function Desk() {
   const exitStep = useStep("queue.exit", queueExit)
   const placeStep = useStep("queue.place", queuePlace)
   const removeStep = useStep("queue.remove", queueRemove)
+  const bookingStep = useStep("booking.get", getBooking)
   const moving =
     accessStep.pending ||
     ignoreStep.pending ||
@@ -140,6 +143,33 @@ function Desk() {
         ? "En producción, primero el desbloqueo de abajo."
         : undefined
   const unlock = environment.readOnly && unlocked
+  /** Ver la reserva: REST, así que no en fake; y solo con un PNR en pantalla. */
+  const bookingReason =
+    environment.id === "fake"
+      ? `Ver reserva: ${FAKE_REST_REASON}.`
+      : desk.journey.current === undefined
+        ? "Sin PNR en pantalla."
+        : undefined
+  const openBooking = () => {
+    const locator = desk.journey.current
+    if (locator === undefined) return
+    dispatch({ type: "booking", locator })
+    bookingStep.execute({ confirmationId: locator, surname: "" })
+  }
+  const removeControl = (
+    <RemoveControl
+      locator={desk.journey.current}
+      from={desk.journey.queue}
+      reason={writeReason}
+      pending={moving}
+      onConfirm={() =>
+        removeStep.execute(
+          { from: "", unlock },
+          moved("remove", "queue.remove")
+        )
+      }
+    />
+  )
 
   return (
     // El layout de la consola deja la cabecera de 3.5rem y un padding de 1rem (1.5rem desde
@@ -223,29 +253,61 @@ function Desk() {
                   )
                 }
               />
-              <RemoveControl
-                locator={desk.journey.current}
-                from={desk.journey.queue}
-                reason={writeReason}
-                pending={moving}
-                onConfirm={() =>
-                  removeStep.execute(
-                    { from: "", unlock },
-                    moved("remove", "queue.remove")
-                  )
-                }
-              />
+              {removeControl}
             </div>
             {environment.readOnly && (
               <UnlockCard unlocked={unlocked} onChange={setUnlocked} />
             )}
-            <p className="text-muted-foreground mt-2 border-t pt-3 text-xs">
-              La reserva llega en F9.4.
-            </p>
+            <div className="mt-1 flex flex-col gap-2 border-t pt-3">
+              <ActionButton
+                label="Ver reserva"
+                method="booking.get"
+                variant="outline"
+                reason={bookingReason}
+                pending={bookingStep.pending}
+                onClick={openBooking}
+              />
+              {bookingReason === undefined ? (
+                <Link
+                  href={`/booking?confirmationId=${desk.journey.current}`}
+                  target="_blank"
+                  rel="noopener"
+                  className={buttonVariants({
+                    variant: "ghost",
+                    size: "sm",
+                    className: "justify-start",
+                  })}
+                >
+                  <ExternalLink />
+                  En pestaña
+                </Link>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-start"
+                  disabled
+                >
+                  <ExternalLink />
+                  En pestaña
+                </Button>
+              )}
+            </div>
           </div>
         </DeskColumn>
       </div>
       <ActivityBar />
+      <BookingSheet
+        locator={desk.booking}
+        run={bookingStep.run}
+        pending={bookingStep.pending}
+        onClose={() => dispatch({ type: "booking" })}
+        removeFromQueue={
+          inside && desk.booking === desk.journey.current
+            ? removeControl
+            : undefined
+        }
+      />
     </div>
   )
 }
