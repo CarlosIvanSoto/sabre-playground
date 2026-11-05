@@ -5,6 +5,11 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { useHistory } from "@/components/history/history-provider"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { findingMarkdown } from "@/lib/finding"
 import type { StepRun } from "@/lib/step/types"
 
@@ -39,9 +44,17 @@ export function CopyFinding({ run, title }: { run: StepRun; title: string }) {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={copy}>
-      {copied ? <CheckIcon /> : <NotebookPenIcon />}
-      Copiar como hallazgo
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={<Button variant="outline" size="sm" onClick={copy} />}
+      >
+        {copied ? <CheckIcon /> : <NotebookPenIcon />}
+        Copiar como hallazgo
+      </TooltipTrigger>
+      <TooltipContent>
+        Copia este paso como bloque Markdown para la wiki: fecha, entorno,
+        método, request, respuesta cruda y error, sin token ni datos personales.
+      </TooltipContent>
+    </Tooltip>
   )
 }
