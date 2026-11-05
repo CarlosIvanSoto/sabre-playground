@@ -4,7 +4,7 @@ Piezas de la v1 (tag `v1`) que se reutilizan en la v2. Están **fuera de `src/`*
 
 | Pieza | Se retoma en |
 | - | - |
-| `components/sabre/session-timer.tsx`, `components/sabre/session-status.tsx` | F4.2 / F4.3 |
+| `components/sabre/session-status.tsx` | F4.3 (el contador ya pasó a `src/components/session/session-timer.tsx`) |
 | `components/sabre/queue-*-form.tsx` | F4.2 / F4.3 |
 | `app/queue/**` (rutas por PCC y cola) | F4.2 / F4.3 |
 
