@@ -13,6 +13,8 @@ export type SessionStatus =
       /** ISO 8601. */
       openedAt: string
       keepAlive: boolean
+      /** PCC de la sesión, el default de las colas. */
+      pcc: string
       /** `session.idleMs` al armar el estado: ms desde la última respuesta de Sabre. */
       idleMs: number
       /** Cuándo se tomó `idleMs` (ISO 8601), para que el contador siga en el navegador. */

@@ -37,12 +37,12 @@ export function SessionFlow() {
   )
 }
 
-interface StepProps {
+export interface StepProps {
   open: boolean
   onDone: () => void
 }
 
-function OpenStep({ open, onDone }: StepProps) {
+export function OpenStep({ open, onDone }: StepProps) {
   const { run, pending, execute } = useStep("legacy.openSession", openSession)
   const [keepAlive, setKeepAlive] = useState(false)
 
@@ -116,7 +116,7 @@ function PingStep({ open, onDone }: StepProps) {
   )
 }
 
-function CloseStep({ open, onDone }: StepProps) {
+export function CloseStep({ open, onDone }: StepProps) {
   const { run, pending, execute } = useStep("session.close", closeSession)
   return (
     <StepPanel
