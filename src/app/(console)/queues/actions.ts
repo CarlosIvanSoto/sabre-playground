@@ -1,6 +1,7 @@
 "use server"
 
 import type { QueueProcessAction } from "sabre-client"
+import type { QueueFake } from "sabre-client/testing"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import {
   type ProcessVisit,
@@ -14,7 +15,17 @@ import {
 } from "@/lib/queues"
 import type { StepRun } from "@/lib/step/types"
 import { getEnvironment } from "@/server/config/environments"
-import { withRegisteredSession } from "@/server/sabre/sessions"
+import { getQueueFake, resetQueueFake } from "@/server/sabre/clients"
+import {
+  FAKE_EMPTY_QUEUE,
+  FAKE_QUEUE,
+  FAKE_QUEUES_RECORDED_AT,
+} from "@/server/sabre/fake-queues"
+import { runStep } from "@/server/sabre/run-step"
+import {
+  getSessionStatus,
+  withRegisteredSession,
+} from "@/server/sabre/sessions"
 import { inEnvironment } from "@/server/sabre/step-action"
 
 /**
@@ -182,5 +193,56 @@ export async function queueProcess(
       )
       return { ...result, visits }
     })
+  })
+}
+
+/** Lo que hay en el fake: sus colas, las llamadas que recibió y las sesiones abiertas. */
+function fakeSnapshot(fake: QueueFake) {
+  return {
+    recordedAt: FAKE_QUEUES_RECORDED_AT,
+    queues: {
+      [FAKE_QUEUE]: fake.locators(Number(FAKE_QUEUE)),
+      [FAKE_EMPTY_QUEUE]: fake.locators(Number(FAKE_EMPTY_QUEUE)),
+    },
+    openSessions: fake.openSessions,
+    calls: fake.calls.length,
+    lastCalls: fake.calls.slice(-10),
+  }
+}
+
+/** Solo en fake: el contenido de las colas del fake (`QueueFake.locators`) y sus llamadas. */
+export async function fakeQueues(
+  environment: unknown,
+  _input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    if (id !== "fake") return { enabled: false, reason: "solo en el modo fake" }
+    return {
+      enabled: true,
+      step: await runStep(async () => fakeSnapshot(getQueueFake())),
+    }
+  })
+}
+
+/**
+ * Solo en fake: vuelve a armar las colas desde `queueFixtures`, después de un `remove` o un
+ * `place`. Con una sesión abierta no: quedaría apuntando a un fake que ya no existe.
+ */
+export async function resetFakeQueues(
+  environment: unknown,
+  _input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    if (id !== "fake") return { enabled: false, reason: "solo en el modo fake" }
+    if ((await getSessionStatus(id)).open) {
+      return {
+        enabled: false,
+        reason: "hay una sesión abierta en el fake: ciérrala primero",
+      }
+    }
+    return {
+      enabled: true,
+      step: await runStep(async () => fakeSnapshot(resetQueueFake())),
+    }
   })
 }

@@ -13,6 +13,7 @@ import {
   type EnvironmentId,
   getEnvironment,
 } from "@/server/config/environments"
+import { fakeQueueOptions } from "@/server/sabre/fake-queues"
 import { sabreLogger } from "@/server/sabre/log"
 import { tracedTokenStore } from "@/server/sabre/token-store"
 
@@ -92,18 +93,13 @@ const FAKE_REST_REASON =
   "el modo fake no tiene fixtures REST: sabre-client/testing solo trae colas"
 
 /**
- * `SabreLegacy` del modo fake: sin red, contra `createQueueFake`. Las colas son sintéticas y
- * duran lo que dure el proceso. El flujo de colas en fake, con `queueFixtures`, llega con
- * F5.1 (#21).
+ * `SabreLegacy` del modo fake: sin red, contra `createQueueFake`, con las colas que arma
+ * `fake-queues.ts` desde `queueFixtures`. Duran lo que dure el proceso, o hasta
+ * `resetQueueFake()`.
  */
 function fakeLegacy(): SabreLegacy {
   if (clients.queueFake === undefined) {
-    clients.queueFake = createQueueFake({
-      queues: {
-        "12": [{ locator: "AAAAAA" }, { locator: "BBBBBB" }],
-        "50": [{ locator: "CCCCCC" }],
-      },
-    })
+    clients.queueFake = createQueueFake(fakeQueueOptions())
     // Un `SabreLegacy` de antes (recarga en caliente) usaría otro fake.
     clients.fake = undefined
   }
@@ -151,4 +147,14 @@ export function getQueueFake(): QueueFake {
   fakeLegacy()
   if (clients.queueFake === undefined) throw new Error("fake sin crear")
   return clients.queueFake
+}
+
+/**
+ * Vuelve a armar el fake con las colas de las fixtures. Las sesiones abiertas en el fake
+ * anterior quedan sin servidor: quien lo llame tiene que sacarlas del registro antes.
+ */
+export function resetQueueFake(): QueueFake {
+  clients.queueFake = undefined
+  clients.fake = undefined
+  return getQueueFake()
 }
