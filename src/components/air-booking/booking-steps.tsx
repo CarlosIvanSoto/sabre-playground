@@ -49,11 +49,16 @@ export function CreateStep({
   revalidated,
   travelers,
   seatPlan,
+  disabled = false,
+  onStart,
   onCreated,
 }: {
   revalidated?: ChosenItinerary
   travelers: number
   seatPlan?: SeatPlan
+  disabled?: boolean
+  onStart: () => void
+  /** El localizador, o `undefined` si Create falló. */
   onCreated: (confirmationId: string | undefined) => void
 }) {
   const { environment } = useEnvironment()
@@ -72,7 +77,7 @@ export function CreateStep({
       seats,
       seatAvailability: seats.length > 0 ? seatPlan?.availability : undefined,
     }
-    onCreated(undefined)
+    onStart()
     execute(input, (result) =>
       onCreated(
         result.enabled && result.step.ok
@@ -123,7 +128,10 @@ export function CreateStep({
           <Button
             onClick={create}
             disabled={
-              pending || revalidated === undefined || environment.readOnly
+              pending ||
+              disabled ||
+              revalidated === undefined ||
+              environment.readOnly
             }
           >
             Reservar
@@ -140,19 +148,25 @@ export function ReadStep({
   confirmationId,
   final = false,
   waitingFor,
+  disabled = false,
   onRead,
 }: {
   confirmationId?: string
   final?: boolean
   /** Qué falta para poder correr el paso, si falta algo. */
   waitingFor?: string
-  onRead?: (ok: boolean) => void
+  disabled?: boolean
+  /** Si leyó la reserva y, si leyó, si ya no trae vuelos. */
+  onRead: (ok: boolean, noFlights?: boolean) => void
 }) {
   const { run, pending, execute } = useStep("booking.get", getBooking)
   const read = () => {
     if (confirmationId === undefined) return
     const input: BookingGetInput = { confirmationId }
-    execute(input, (result) => onRead?.(result.enabled && result.step.ok))
+    execute(input, (result) => {
+      const ok = result.enabled && result.step.ok
+      onRead(ok, ok ? hasNoFlights(result.step.result) : undefined)
+    })
   }
 
   return (
@@ -184,7 +198,10 @@ export function ReadStep({
       form={
         <div className="flex flex-col gap-4">
           <Locator confirmationId={confirmationId} waitingFor={waitingFor} />
-          <Button onClick={read} disabled={pending || waitingFor !== undefined}>
+          <Button
+            onClick={read}
+            disabled={pending || disabled || waitingFor !== undefined}
+          >
             {final ? "Comprobar" : "Leer"}
           </Button>
         </div>
@@ -196,9 +213,11 @@ export function ReadStep({
 /** El botón "limpiar": `booking.cancel` con `cancelAll`, con confirmación. */
 export function CleanupStep({
   confirmationId,
+  disabled = false,
   onCancelled,
 }: {
   confirmationId?: string
+  disabled?: boolean
   onCancelled: (ok: boolean) => void
 }) {
   const { environment } = useEnvironment()
@@ -236,7 +255,10 @@ export function CleanupStep({
             variant="destructive"
             onClick={() => setConfirming(true)}
             disabled={
-              pending || confirmationId === undefined || environment.readOnly
+              pending ||
+              disabled ||
+              confirmationId === undefined ||
+              environment.readOnly
             }
           >
             Limpiar

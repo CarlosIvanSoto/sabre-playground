@@ -5,7 +5,6 @@ import {
   ItineraryBrief,
   ItineraryList,
 } from "@/components/air-booking/itinerary-list"
-import type { SearchSelection } from "@/components/air-booking/search-step"
 import { StepPanel } from "@/components/step/step-panel"
 import { useStep } from "@/components/step/use-step"
 import { Button } from "@/components/ui/button"
@@ -14,6 +13,7 @@ import {
   type RevalidateInput,
   revalidatedItinerary,
 } from "@/lib/air-booking"
+import type { SearchSelection } from "@/lib/air-booking-journey"
 
 /**
  * Paso 2 (F3.2): revalidar el itinerario elegido en el paso 1. El request lo arma
@@ -21,9 +21,14 @@ import {
  */
 export function RevalidateStep({
   selection,
+  disabled = false,
+  onStart,
   onRevalidated,
 }: {
   selection?: SearchSelection
+  disabled?: boolean
+  onStart: () => void
+  /** El itinerario revalidado, o `undefined` si el paso falló. */
   onRevalidated: (revalidated: ChosenItinerary | undefined) => void
 }) {
   const { run, pending, execute } = useStep(
@@ -38,7 +43,7 @@ export function RevalidateStep({
       group: selection.group,
       itinerary: selection.itinerary,
     }
-    onRevalidated(undefined)
+    onStart()
     execute(input, (result) =>
       onRevalidated(
         result.enabled && result.step.ok
@@ -73,7 +78,7 @@ export function RevalidateStep({
           )}
           <Button
             onClick={revalidate}
-            disabled={pending || selection === undefined}
+            disabled={pending || disabled || selection === undefined}
           >
             Revalidar
           </Button>

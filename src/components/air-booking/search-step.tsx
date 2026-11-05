@@ -17,28 +17,27 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
-  type ChosenItinerary,
   SEARCH_DEFAULTS,
   type SearchInput,
   type SearchQuery,
   searchSchema,
 } from "@/lib/air-booking"
-
-/** Lo que el paso 1 le pasa al siguiente: la búsqueda que lo produjo y el itinerario elegido. */
-export interface SearchSelection extends ChosenItinerary {
-  /** La búsqueda tal cual se mandó: Revalidate vuelve a armar el request de BFM con ella. */
-  query: SearchQuery
-  /** `<grupo>:<id>` de la fila elegida. */
-  key: string
-}
+import type { SearchSelection } from "@/lib/air-booking-journey"
 
 /** Paso 1 (F3.1): Bargain Finder Max con un formulario mínimo, y elegir un itinerario. */
 export function SearchStep({
   selection,
+  disabled = false,
+  onStart,
+  onDone,
   onSelect,
 }: {
   selection?: SearchSelection
-  onSelect: (selection: SearchSelection | undefined) => void
+  /** El recorrido no deja buscar (p. ej. hay una reserva sin limpiar). */
+  disabled?: boolean
+  onStart: () => void
+  onDone: (ok: boolean) => void
+  onSelect: (selection: SearchSelection) => void
 }) {
   const { run, pending, execute } = useStep(
     "air.bargainFinderMax",
@@ -55,8 +54,8 @@ export function SearchStep({
   const submit = (input: SearchQuery) => {
     setSubmitted(input)
     // Una búsqueda nueva deja sin efecto la elección anterior.
-    onSelect(undefined)
-    execute(input)
+    onStart()
+    execute(input, (result) => onDone(result.enabled && result.step.ok))
   }
 
   return (
@@ -77,8 +76,11 @@ export function SearchStep({
           <ItineraryList
             result={result}
             chosenKey={selection?.key}
-            onChoose={(key, chosen) =>
-              onSelect({ ...chosen, key, query: submitted })
+            onChoose={
+              disabled
+                ? undefined
+                : (key, chosen) =>
+                    onSelect({ ...chosen, key, query: submitted })
             }
           />
         )
@@ -165,7 +167,7 @@ export function SearchStep({
               </Field>
             )}
           />
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending || disabled}>
             Buscar
           </Button>
         </form>
