@@ -6,7 +6,7 @@ import {
   type SabreConfig,
   SabreLegacy,
 } from "sabre-client"
-import { createQueueFake } from "sabre-client/testing"
+import { createQueueFake, type QueueFake } from "sabre-client/testing"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import {
   DEFAULT_ENVIRONMENT,
@@ -38,6 +38,8 @@ interface Clients {
   rest: Map<EnvironmentId, ClientResult<Sabre>>
   soap: Map<EnvironmentId, ClientResult<SabreLegacy>>
   fake?: SabreLegacy
+  /** El fake detrás de `fake`: deja vencer sesiones y contar las abiertas. */
+  queueFake?: QueueFake
 }
 
 // En `globalThis` para que la recarga en caliente de `pnpm dev` no tire el token.
@@ -95,6 +97,16 @@ const FAKE_REST_REASON =
  * F5.1 (#21).
  */
 function fakeLegacy(): SabreLegacy {
+  if (clients.queueFake === undefined) {
+    clients.queueFake = createQueueFake({
+      queues: {
+        "12": [{ locator: "AAAAAA" }, { locator: "BBBBBB" }],
+        "50": [{ locator: "CCCCCC" }],
+      },
+    })
+    // Un `SabreLegacy` de antes (recarga en caliente) usaría otro fake.
+    clients.fake = undefined
+  }
   clients.fake ??= new SabreLegacy({
     environment: "sandbox",
     credentials: buildCredentials({
@@ -103,12 +115,7 @@ function fakeLegacy(): SabreLegacy {
       pcc: "TEST",
       password: "fake",
     }),
-    fetch: createQueueFake({
-      queues: {
-        "12": [{ locator: "AAAAAA" }, { locator: "BBBBBB" }],
-        "50": [{ locator: "CCCCCC" }],
-      },
-    }).fetch,
+    fetch: clients.queueFake.fetch,
     logger: sabreLogger,
   })
   return clients.fake
@@ -137,4 +144,11 @@ export function getSabreLegacy(
 ): ClientResult<SabreLegacy> {
   if (id === "fake") return { enabled: true, client: fakeLegacy() }
   return create(clients.soap, id, (config) => new SabreLegacy(config))
+}
+
+/** El `QueueFake` del entorno fake, creado junto con su `SabreLegacy`. */
+export function getQueueFake(): QueueFake {
+  fakeLegacy()
+  if (clients.queueFake === undefined) throw new Error("fake sin crear")
+  return clients.queueFake
 }

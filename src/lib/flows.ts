@@ -72,7 +72,7 @@ export const FLOWS: Flow[] = [
     title: "Sesión SOAP",
     description:
       "Abrir, hacer ping y cerrar una sesión, con el contador de inactividad.",
-    methods: ["legacy.openSession", "legacy.withSession"],
+    methods: ["legacy.openSession", "session.ping", "session.close"],
     wiki: "wiki/entities/create-session.md",
     phase: 4,
   },
