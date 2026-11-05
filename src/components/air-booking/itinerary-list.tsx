@@ -127,3 +127,26 @@ function Flights({ summary }: { summary: ItinerarySummary }) {
     </div>
   )
 }
+
+/** El itinerario que recibe un paso, en pocas líneas: para la columna del formulario. */
+export function ItineraryBrief({
+  chosen,
+  label,
+}: {
+  chosen: ChosenItinerary
+  label: string
+}) {
+  const summary = summarizeItinerary(chosen.group, 0, chosen.itinerary)
+  return (
+    <div className="bg-muted/50 flex flex-col gap-1 rounded-md p-3">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <Flights summary={summary} />
+      <p className="font-mono text-xs">
+        Clase {summary.bookingClasses.join(" ") || "—"} ·{" "}
+        {summary.price === undefined
+          ? "sin precio"
+          : `${summary.price.amount.toFixed(2)} ${summary.price.currency}`}
+      </p>
+    </div>
+  )
+}

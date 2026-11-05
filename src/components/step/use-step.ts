@@ -24,13 +24,18 @@ export function useStep<I>(
   const [run, setRun] = useState<StepRun>()
   const [pending, startTransition] = useTransition()
 
-  const execute = (input: I) =>
+  /** `onDone` recibe lo que devolvió la action: así un paso le pasa su resultado al siguiente. */
+  const execute = (input: I, onDone?: (run: StepRun) => void) =>
     startTransition(async () => {
       const at = new Date().toISOString()
       const result = await action(environment.id, input)
       setRun(result)
       record({ method, at, input, run: result })
+      onDone?.(result)
     })
 
-  return { run, pending, execute }
+  /** Vuelve al estado inicial, sin llamada. Lo usa el recorrido al invalidar un paso. */
+  const reset = () => setRun(undefined)
+
+  return { run, pending, execute, reset }
 }
