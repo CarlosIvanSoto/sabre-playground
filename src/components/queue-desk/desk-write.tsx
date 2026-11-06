@@ -75,7 +75,7 @@ export function MoveControl({
       <div className="grid grid-cols-[minmax(0,1fr)_4.5rem] gap-2">
         <div className="flex flex-col gap-1">
           <Label htmlFor="desk-move-queue" className="text-xs">
-            Cola destino
+            <kbd className="font-mono opacity-70">M</kbd> Cola destino
           </Label>
           <Input
             id="desk-move-queue"
@@ -152,6 +152,7 @@ export function RemoveControl({
       <Confirm
         label="Sacar de la cola"
         method="queue.remove"
+        shortcut="r"
         variant="outline"
         disabled={pending || reason !== undefined}
         title={`Sacar ${locator ?? "el PNR"}`}
@@ -172,6 +173,7 @@ export function Confirm({
   method,
   variant = "default",
   side = "left",
+  shortcut,
   disabled,
   title,
   summary,
@@ -182,6 +184,8 @@ export function Confirm({
   variant?: "default" | "outline" | "destructive"
   /** Hacia dónde abre el popover. */
   side?: "left" | "bottom" | "top"
+  /** La tecla del atajo de la mesa, en minúscula: abre el popover, no confirma. */
+  shortcut?: string
   disabled: boolean
   title: string
   summary: string
@@ -197,10 +201,18 @@ export function Confirm({
             variant={variant}
             disabled={disabled}
             className="justify-between"
+            data-desk-key={shortcut}
           />
         }
       >
-        {label}
+        <span>
+          {shortcut !== undefined && (
+            <kbd className="me-1.5 font-mono text-xs opacity-70">
+              {shortcut.toUpperCase()}
+            </kbd>
+          )}
+          {label}
+        </span>
         <code className="text-xs opacity-70">{method}</code>
       </PopoverTrigger>
       <PopoverContent side={side} align="start" initialFocus={confirm}>

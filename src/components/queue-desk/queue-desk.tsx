@@ -1,6 +1,6 @@
 "use client"
 
-import { ExternalLink, HistoryIcon, RotateCwIcon } from "lucide-react"
+import { ExternalLink, RotateCwIcon } from "lucide-react"
 import Link from "next/link"
 import { type ReactNode, useEffect, useReducer, useState } from "react"
 import { getBooking } from "@/app/(console)/booking/actions"
@@ -13,7 +13,7 @@ import {
   queueRemove,
 } from "@/app/(console)/queues/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
-import { useHistory } from "@/components/history/history-provider"
+import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { BookingSheet } from "@/components/queue-desk/desk-booking"
 import { DeskQueues } from "@/components/queue-desk/desk-queues"
 import { DeskScreenView } from "@/components/queue-desk/desk-screen"
@@ -46,7 +46,12 @@ import type { StepRun } from "@/lib/step/types"
  * cada llamada pasa por `useStep` y queda en el historial.
  *
  * Al cambiar de entorno, la mesa se vuelve a montar: el conteo y el cursor de un entorno no
- * valen en otro. Los atajos y la barra de actividad llegan en F9.5.
+ * valen en otro.
+ *
+ * Atajos (F9.5): I siguiente, M mover (foco en la cola destino), R sacar, E salir, B reserva,
+ * ? la leyenda. Solo con el foco fuera de los campos y sin una hoja o un popover abiertos;
+ * cada atajo hace clic en su botón, así que respeta si está deshabilitado, y mover y sacar
+ * siguen pidiendo confirmación.
  */
 export function QueueDesk() {
   const { environment } = useEnvironment()
@@ -59,6 +64,10 @@ function Desk() {
   // Producción: el desbloqueo de `remove` y `place`, como en el flujo 6. Se pierde al recargar
   // o al cambiar de entorno (la mesa se vuelve a montar).
   const [unlocked, setUnlocked] = useState(false)
+  const [legendOpen, setLegendOpen] = useState(false)
+  // Las llamadas del historial desde aquí son de la mesa: la barra de actividad solo muestra
+  // esas.
+  const [since] = useState(() => new Date().toISOString())
   const [desk, dispatch] = useReducer(queueDeskReducer, undefined, () =>
     initialQueueDesk()
   )
@@ -101,6 +110,40 @@ function Desk() {
     window.addEventListener("beforeunload", warn)
     return () => window.removeEventListener("beforeunload", warn)
   }, [open])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey) return
+      if (event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest(EDITABLE)) return
+      if (event.key === "?") {
+        event.preventDefault()
+        setLegendOpen((open) => !open)
+        return
+      }
+      // Con una hoja o un popover abiertos, las teclas son de ellos (Esc los cierra).
+      if (document.querySelector(OVERLAYS) !== null) return
+      const key = event.key.toLowerCase()
+      if (key === "m") {
+        const input = document.getElementById("desk-move-queue")
+        if (input !== null) {
+          event.preventDefault()
+          input.focus()
+        }
+        return
+      }
+      const button = document.querySelector<HTMLButtonElement>(
+        `[data-desk-key="${key}"]`
+      )
+      if (button !== null && !button.disabled) {
+        event.preventDefault()
+        button.click()
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [])
 
   /** Después de un paso que mueve el cursor: al reducer y a pedir el estado de la sesión. */
   const moved =
@@ -219,6 +262,7 @@ function Desk() {
             <ActionButton
               label="Siguiente"
               method="queue.ignore"
+              shortcut="i"
               reason={reason("ignore")}
               pending={moving}
               onClick={() =>
@@ -228,6 +272,7 @@ function Desk() {
             <ActionButton
               label="Salir de la cola"
               method="queue.exit"
+              shortcut="e"
               variant="outline"
               reason={reason("exit")}
               pending={moving}
@@ -262,6 +307,7 @@ function Desk() {
               <ActionButton
                 label="Ver reserva"
                 method="booking.get"
+                shortcut="b"
                 variant="outline"
                 reason={bookingReason}
                 pending={bookingStep.pending}
@@ -296,7 +342,11 @@ function Desk() {
           </div>
         </DeskColumn>
       </div>
-      <ActivityBar />
+      <ActivityBar
+        since={since}
+        legendOpen={legendOpen}
+        onLegendOpenChange={setLegendOpen}
+      />
       <BookingSheet
         locator={desk.booking}
         run={bookingStep.run}
@@ -347,6 +397,7 @@ function ScreenTitle({
 function ActionButton({
   label,
   method,
+  shortcut,
   reason,
   pending,
   variant = "default",
@@ -354,6 +405,8 @@ function ActionButton({
 }: {
   label: string
   method: string
+  /** La tecla del atajo, en minúscula. */
+  shortcut?: string
   reason?: string
   pending: boolean
   variant?: "default" | "outline"
@@ -366,8 +419,21 @@ function ActionButton({
         disabled={pending || reason !== undefined}
         onClick={onClick}
         className="justify-between"
+        data-desk-key={shortcut}
+        title={
+          shortcut === undefined
+            ? undefined
+            : `Atajo: ${shortcut.toUpperCase()}`
+        }
       >
-        {label}
+        <span>
+          {shortcut !== undefined && (
+            <kbd className="me-1.5 font-mono text-xs opacity-70">
+              {shortcut.toUpperCase()}
+            </kbd>
+          )}
+          {label}
+        </span>
         <code className="text-xs opacity-70">{method}</code>
       </Button>
       {reason !== undefined && (
@@ -416,27 +482,9 @@ function DeskColumn({
   )
 }
 
-/**
- * La barra de actividad. En F9.5 muestra las últimas llamadas de la mesa con su detalle; por
- * ahora, cuántas llamadas hay en el historial del navegador y el enlace para verlas.
- */
-function ActivityBar() {
-  const { entries } = useHistory()
-  return (
-    <footer className="text-muted-foreground flex h-10 shrink-0 items-center gap-2 border-t px-4 text-sm">
-      <span className="font-medium">Actividad</span>
-      <span>
-        {entries.length === 0
-          ? "sin llamadas todavía"
-          : `${entries.length} ${entries.length === 1 ? "llamada" : "llamadas"} en el historial`}
-      </span>
-      <Link
-        href="/history"
-        className="hover:text-foreground ms-auto inline-flex items-center gap-1"
-      >
-        <HistoryIcon className="size-4" />
-        Historial
-      </Link>
-    </footer>
-  )
-}
+/** Dónde no cuentan los atajos: los campos de texto y los selectores. */
+const EDITABLE =
+  "input, textarea, select, [contenteditable='true'], [role='combobox']"
+
+/** Las capas que se quedan con el teclado mientras están abiertas. */
+const OVERLAYS = "[data-slot=popover-content], [data-slot=sheet-content]"

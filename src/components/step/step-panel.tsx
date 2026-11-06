@@ -101,7 +101,11 @@ export function StepPanel({
   )
 }
 
-function StepOutput({
+/**
+ * Las pestañas Resultado / Crudo / Error / Log de una llamada, con "Copiar como hallazgo". La
+ * usa el `StepPanel`, y sola, la barra de actividad de la mesa de colas.
+ */
+export function StepOutput({
   run,
   pending,
   title,
