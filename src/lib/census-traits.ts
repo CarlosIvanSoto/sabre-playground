@@ -86,7 +86,13 @@ export interface FlightTraits {
   status: string | null
   /** `flightStatusName`, el enum del spec. */
   statusName: string | null
-  /** Minutos entre la salida nueva (`updatedDeparture*`) y la original; `null` si no hay. */
+  /**
+   * Minutos entre `updatedDeparture*` y la salida original; `null` si no hay. Según el spec v1.33,
+   * `updatedDeparture*` es la salida **estimada o real** (demoras cerca de la salida), no un
+   * cambio de horario del itinerario: ese se ve en `status` (`UN`, `TK`, `SC`, `WK`). En el
+   * primer censo de producción vino `null` en los 393 vuelos (Q-091). El nombre queda por
+   * `queue-census/1`.
+   */
   scheduleChangeMinutes: number | null
   daysToDeparture: number | null
   isPast: boolean | null

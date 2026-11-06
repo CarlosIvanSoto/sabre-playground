@@ -139,8 +139,18 @@ export function CensusSummaryView({
                 >
                   Boleto
                 </TableHead>
-                <TableHead className="text-end">TAW vencido</TableHead>
-                <TableHead className="text-end">Cambio de horario</TableHead>
+                <TableHead
+                  className="text-end"
+                  title="Sobre los PNR con reserva y sin boleto: en uno emitido el plazo siempre quedó atrás"
+                >
+                  TAW vencido
+                </TableHead>
+                <TableHead
+                  className="text-end"
+                  title="PNR con algún segmento UN, TK, SC o WK"
+                >
+                  Cambio de horario
+                </TableHead>
                 <TableHead
                   className="text-end"
                   title="Media de placedAgeHours: una cota (Q-034), no la entrada a la cola"
@@ -186,15 +196,17 @@ export function CensusSummaryView({
             </TableBody>
           </Table>
           <p className="text-muted-foreground text-xs">
-            Boleto, TAW y horario son porcentajes de los PNR de la cola con los
-            rasgos de la reserva (
+            Boleto y horario: sobre los PNR con los rasgos de la reserva. TAW
+            vencido: sobre los que además no tienen boleto. Cambio de horario:
+            algún segmento UN, TK, SC o WK. Bases por cola (con reserva / sin
+            boleto / leídos):{" "}
             {summary.queues
               .map(
                 (queue) =>
-                  `${queue.queue}: ${queue.withBooking}/${queue.sampled}`
+                  `${queue.queue}: ${queue.withBooking}/${queue.unticketed}/${queue.sampled}`
               )
               .join(", ")}
-            ). La reserva de un PNR se abre desde su localizador.
+            . La reserva de un PNR se abre desde su localizador.
           </p>
         </section>
       </CardContent>
