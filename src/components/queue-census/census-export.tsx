@@ -18,9 +18,9 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   ALIAS_PATTERN,
-  buildCensusExport,
   censusFileName,
   distinctPicTexts,
+  type QueueCensusExport,
   validateCensusExport,
 } from "@/lib/census-export"
 import type { QueueCensus } from "@/lib/queue-census"
@@ -35,17 +35,21 @@ const SHOWN_ISSUES = 20
  */
 export function CensusExport({
   census,
+  doc,
+  alias,
+  onAliasChange,
   pccs,
 }: {
   census: QueueCensus
+  /** El JSON que se exporta: el mismo del que sale el resumen (F10.4). */
+  doc: QueueCensusExport
+  alias: string
+  onAliasChange: (alias: string) => void
   /** Los PCC reales (de la sesión y de trabajo), que no pueden aparecer en el JSON. */
   pccs: string[]
 }) {
-  const [alias, setAlias] = useState("P1")
   const [reviewed, setReviewed] = useState(false)
   const normalized = alias.trim().toUpperCase()
-  const doc = buildCensusExport(census, normalized)
-  if (doc === undefined) return null
 
   const locators = new Set(
     census.queues.flatMap((queue) => queue.items.map((item) => item.pnr))
@@ -99,7 +103,7 @@ export function CensusExport({
             maxLength={3}
             aria-invalid={!ALIAS_PATTERN.test(normalized)}
             value={alias}
-            onChange={(event) => setAlias(event.target.value)}
+            onChange={(event) => onAliasChange(event.target.value)}
           />
           <FieldDescription>
             <code>P1</code>, <code>P2</code>…: el censo nunca lleva el PCC real.
