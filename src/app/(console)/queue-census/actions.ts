@@ -170,6 +170,14 @@ export async function censusExit(
   )
 }
 
+/**
+ * La hora del censo (`takenAt` de `queue-census/1`): el reloj del servidor de la consola, en UTC
+ * (ADR-026). El SDK no expone el `eb:Timestamp` de Sabre.
+ */
+export async function censusClock(): Promise<string> {
+  return new Date().toISOString()
+}
+
 const bookingSchema = z.object({
   pnr: z.string().regex(/^[A-Z0-9]{6}$/),
   pcc: optionalPcc,

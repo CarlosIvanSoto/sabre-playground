@@ -90,7 +90,7 @@ bandera, producción no aparece aunque haya credenciales.
 | `/queues`, `/queues/<PCC>/<cola>` | 6. Colas: `count`, `list`, `access`, `ignore`, `remove`, `place`, `exit` y `process`. |
 | `/queue-paragraph` | 7. Párrafo de cola: el parser, sin red. |
 | `/queue-desk`, `/queue-desk/<PCC>` | Mesa de colas (ADR-025): sesión, conteo, navegación y reserva en una sola pantalla, sin scroll. Compone los flujos 4, 5 y 6; se arma en la Fase 9. Con `<PCC>`, o con el campo "PCC de trabajo", cuenta, entra, mueve y lee reservas en ese PCC sin abrir otra sesión. |
-| `/queue-census`, `/queue-census/<PCC>` | Censo de colas (ADR-026, Fase 10): recorrido de solo lectura por las colas 0–49 con PNR del PCC de trabajo. `count`, y por cada cola `access`, hasta N `ignore` (10 por defecto, máximo 25) y `exit`; al final, otro `count` para comparar. Por cada PNR, `booking.get` con el PCC de trabajo. Al navegador llegan solo los rasgos de ADR-026, calculados en el servidor: ni el párrafo, ni la reserva, ni el body del crudo. Sus server actions no tienen `place`, `remove` ni `process`. Parar sale de la cola con `exit`. En producción pide el desbloqueo y una confirmación con el resumen. |
+| `/queue-census`, `/queue-census/<PCC>` | Censo de colas (ADR-026, Fase 10): recorrido de solo lectura por las colas 0–49 con PNR del PCC de trabajo. `count`, y por cada cola `access`, hasta N `ignore` (10 por defecto, máximo 25) y `exit`; al final, otro `count` para comparar. Por cada PNR, `booking.get` con el PCC de trabajo. Al navegador llegan solo los rasgos de ADR-026, calculados en el servidor: ni el párrafo, ni la reserva, ni el body del crudo. Sus server actions no tienen `place`, `remove` ni `process`. Parar sale de la cola con `exit`. En producción pide el desbloqueo y una confirmación con el resumen. Al terminar, exporta `queue-census/1` (descarga o copia) solo si pasa el validador y después de revisar los textos PIC; el JSON trae localizadores reales y nunca va al repo (`censo-colas-*.json` está en `.gitignore`). |
 | `/history` | Las llamadas de la sesión del navegador. |
 | `/dev/run-step` | Prueba de `runStep` (desarrollo). |
 
@@ -149,10 +149,11 @@ es un hallazgo sobre el SDK, no algo para parchar acá.
 pnpm dev      # servidor de desarrollo
 pnpm lint     # Biome (lint y formato)
 pnpm format   # formatear
+pnpm test     # tests unitarios (node:test, sin dependencias)
 pnpm build    # build de producción, con el typecheck
 ```
 
-La CI corre `pnpm biome ci` y `pnpm build` en cada PR. Stack: Next.js 16 (App Router,
+La CI corre `pnpm biome ci`, `pnpm test` y `pnpm build` en cada PR. Stack: Next.js 16 (App Router,
 server actions, React Compiler), React 19, TypeScript 7, Tailwind 4, shadcn sobre
 `@base-ui/react`, `react-hook-form` + `zod`, Biome y pnpm.
 

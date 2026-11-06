@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   check:
-    name: biome y build
+    name: biome, tests y build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -31,6 +31,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm biome ci
+
+      # Tests unitarios con node:test, sin dependencias (Node 24 corre TypeScript sin compilar).
+      - run: pnpm test
 
       # Sin secretos: la app arranca sin credenciales de Sabre.
       - run: pnpm build
