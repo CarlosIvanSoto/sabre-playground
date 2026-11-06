@@ -44,6 +44,8 @@ export interface CensusItem extends ParagraphTraits {
   booking?: BookingTraits | null
   /** El código del error de `booking.get`, o por qué no corrió. */
   bookingError?: string
+  /** Marcado por el usuario: su párrafo enmascarado entra al anexo de la exportación. */
+  flagged?: boolean
 }
 
 /** Una cola del censo. */
@@ -150,6 +152,8 @@ export interface QueueCensus {
   /** El PCC de trabajo con el que se toma; vacío es el de la sesión. */
   pcc: string
   perQueue: number
+  /** `takenAt` de `queue-census/1`: el reloj del servidor al arrancar, en UTC. */
+  takenAt?: string
   /** ISO 8601, al arrancar y al terminar. */
   startedAt?: string
   finishedAt?: string
@@ -204,6 +208,10 @@ export type QueueCensusAction =
   | { type: "pcc"; pcc: string }
   /** Cambiar N, fuera de un recorrido. */
   | { type: "perQueue"; perQueue: number }
+  /** La hora del servidor al arrancar (`takenAt`). */
+  | { type: "takenAt"; at: string }
+  /** Marcar o desmarcar un PNR para el anexo. */
+  | { type: "flag"; ref: string; flagged: boolean }
 
 export function initialQueueCensus(
   pcc = "",
@@ -395,5 +403,19 @@ export function queueCensusReducer(
     case "perQueue":
       if (isRunning(state)) return state
       return { ...state, perQueue: action.perQueue }
+    case "takenAt":
+      return { ...state, takenAt: action.at }
+    case "flag":
+      return {
+        ...state,
+        queues: state.queues.map((row) => ({
+          ...row,
+          items: row.items.map((item) =>
+            item.ref === action.ref
+              ? { ...item, flagged: action.flagged }
+              : item
+          ),
+        })),
+      }
   }
 }

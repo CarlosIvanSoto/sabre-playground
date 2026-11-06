@@ -47,3 +47,7 @@ next-env.d.ts
 
 # skill shadcn: enlace para Claude Code que crea `skills add` (el original vive en .agents/)
 .claude/skills/shadcn
+
+# censo de colas (ADR-026): lleva localizadores reales de producción y vive solo en el wiki
+# privado. La consola lo descarga o lo copia; nunca entra a este repo público.
+censo-colas-*.json
