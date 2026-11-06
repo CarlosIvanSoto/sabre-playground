@@ -64,6 +64,7 @@ describe("summarizeCensus", () => {
       queue: 7,
       sampled: 2,
       withBooking: 1,
+      unticketed: 1,
       pics: [
         { code: 6, count: 1 },
         { code: 11, count: 1 },
@@ -76,11 +77,37 @@ describe("summarizeCensus", () => {
       meanPlacedAgeHours: 31,
     })
     assert.equal(nine?.pctTicketed, 100)
-    assert.equal(nine?.pctTawExpired, 0)
+    // Sin PNR sin boleto, el TAW vencido no tiene base.
+    assert.equal(nine?.unticketed, 0)
+    assert.equal(nine?.pctTawExpired, null)
     assert.equal(nine?.pctScheduleChange, 100)
     assert.deepEqual(nine?.segmentStatus, { UN: 1 })
     assert.deepEqual(nine?.carriers, { DL: 1 })
     assert.equal(nine?.meanPlacedAgeHours, 15)
+  })
+
+  it("no cuenta el TAW vencido de un PNR emitido", () => {
+    const doc = census()
+    const issued = doc.queues[0].items[0].booking
+    if (issued === null) throw new Error("fixture sin reserva")
+    issued.isTicketed = true
+    issued.hoursToPurchaseDeadline = -500
+    const [seven] = summarizeCensus(doc).queues
+    assert.equal(seven?.pctTawExpired, null)
+    assert.equal(seven?.pctTicketed, 100)
+  })
+
+  it("mide el cambio de horario por el estado del segmento, no por los minutos", () => {
+    const doc = census()
+    const booking = doc.queues[0].items[0].booking
+    if (booking === null) throw new Error("fixture sin reserva")
+    booking.flights[0] = {
+      ...booking.flights[0],
+      status: "TK",
+      scheduleChangeMinutes: null,
+    }
+    const [seven] = summarizeCensus(doc).queues
+    assert.equal(seven?.pctScheduleChange, 100)
   })
 
   it("deja null los porcentajes de una cola sin reservas", () => {

@@ -24,9 +24,17 @@ export interface QueueSummary {
   segmentStatus: Record<string, number>
   /** Segmentos por aerolínea comercializadora. */
   carriers: Record<string, number>
-  /** Porcentajes sobre `withBooking`, redondeados; `null` sin reservas. */
+  /** PNR con reserva y sin boleto: la base de `pctTawExpired`. */
+  unticketed: number
+  /** Porcentajes redondeados; `null` si su base es 0. */
+  /** Sobre `withBooking`. */
   pctTicketed: number | null
+  /**
+   * Sobre `unticketed`: en un PNR emitido el plazo de compra siempre queda en el pasado, así que
+   * contarlo daría 100% en una cola de boletos emitidos.
+   */
   pctTawExpired: number | null
+  /** Sobre `withBooking`: PNR con algún segmento en un estado de cambio de horario. */
   pctScheduleChange: number | null
   /** Media de `placedAgeHours`, que es una cota (Q-034); `null` sin datos. */
   meanPlacedAgeHours: number | null
@@ -43,6 +51,19 @@ export interface CensusSummary {
   sharedPnrs: { pnr: string; refs: string[] }[]
   queues: QueueSummary[]
 }
+
+/**
+ * Los estados de segmento de un cambio de horario (ADR-026, "Cómo se clasifica una cola"): `UN`
+ * el vuelo que cambió, `TK` el nuevo, `SC` y `WK`. No se usa `scheduleChangeMinutes`: según el
+ * spec v1.33, `updatedDeparture*` es la salida estimada o real (demoras), no el cambio de horario
+ * del itinerario (Q-091).
+ */
+export const SCHEDULE_CHANGE_STATUS: ReadonlySet<string> = new Set([
+  "UN",
+  "TK",
+  "SC",
+  "WK",
+])
 
 const percent = (part: number, total: number): number | null =>
   total === 0 ? null : Math.round((part / total) * 100)
@@ -62,6 +83,7 @@ export function summarizeCensus(doc: QueueCensusExport): CensusSummary {
     const segmentStatus: Record<string, number> = {}
     const carriers: Record<string, number> = {}
     let withBooking = 0
+    let unticketed = 0
     let ticketed = 0
     let tawExpired = 0
     let scheduleChange = 0
@@ -84,18 +106,21 @@ export function summarizeCensus(doc: QueueCensusExport): CensusSummary {
       const booking = item.booking
       if (booking === null) continue
       withBooking += 1
-      if (booking.isTicketed === true) ticketed += 1
-      if (
-        booking.hoursToPurchaseDeadline !== null &&
-        booking.hoursToPurchaseDeadline < 0
-      ) {
-        tawExpired += 1
+      if (booking.isTicketed === true) {
+        ticketed += 1
+      } else {
+        unticketed += 1
+        if (
+          booking.hoursToPurchaseDeadline !== null &&
+          booking.hoursToPurchaseDeadline < 0
+        ) {
+          tawExpired += 1
+        }
       }
       if (
         booking.flights.some(
           (flight) =>
-            flight.scheduleChangeMinutes !== null &&
-            flight.scheduleChangeMinutes !== 0
+            flight.status !== null && SCHEDULE_CHANGE_STATUS.has(flight.status)
         )
       ) {
         scheduleChange += 1
@@ -111,13 +136,14 @@ export function summarizeCensus(doc: QueueCensusExport): CensusSummary {
       queue: queue.queue,
       sampled: queue.items.length,
       withBooking,
+      unticketed,
       pics: Object.entries(cells)
         .map(([code, count]) => ({ code: Number(code), count }))
         .sort((a, b) => b.count - a.count || a.code - b.code),
       segmentStatus,
       carriers,
       pctTicketed: percent(ticketed, withBooking),
-      pctTawExpired: percent(tawExpired, withBooking),
+      pctTawExpired: percent(tawExpired, unticketed),
       pctScheduleChange: percent(scheduleChange, withBooking),
       meanPlacedAgeHours:
         ages.length === 0
