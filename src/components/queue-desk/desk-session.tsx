@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { failureOf } from "@/lib/queue-desk"
 import type { SessionStatus } from "@/lib/session"
 import type { StepRun } from "@/lib/step/types"
 
@@ -142,12 +143,4 @@ function QueueStateBadge({ status }: { status?: SessionStatus }) {
       {status.queueState}
     </Badge>
   )
-}
-
-/** El motivo de un paso que no corrió o que falló, para la barra. */
-function failureOf(run: StepRun | undefined): string | undefined {
-  if (run === undefined) return undefined
-  if (!run.enabled) return run.reason
-  if (run.step.ok) return undefined
-  return run.step.error?.message ?? "la llamada falló"
 }

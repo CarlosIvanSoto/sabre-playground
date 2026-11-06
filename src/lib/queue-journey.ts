@@ -206,3 +206,15 @@ export function stepsFor(place: SessionPlace): ReadonlySet<QueuePanel> {
       return new Set(["exit"])
   }
 }
+
+/** Por qué un paso no se puede correr donde está la sesión. Lo comparten el flujo 6 y la mesa. */
+export function disabledReason(place: SessionPlace, panel: QueuePanel): string {
+  if (place === "closed") return "Abre una sesión primero."
+  if (place === "unknown") {
+    return "La sesión está en unknown: primero queue.exit."
+  }
+  if (place === "inside") return "Solo fuera de una cola: primero queue.exit."
+  return panel === "exit"
+    ? "Solo dentro de una cola o en unknown."
+    : "Solo dentro de una cola: primero queue.access."
+}
