@@ -4,11 +4,13 @@ import { Play, Square } from "lucide-react"
 import { useEffect, useReducer, useRef, useState } from "react"
 import {
   censusAccess,
+  censusBooking,
   censusCount,
   censusExit,
   censusIgnore,
 } from "@/app/(console)/queue-census/actions"
 import { sessionStatus } from "@/app/(console)/session/actions"
+import { JsonTree } from "@/components/custom/json-tree"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
@@ -39,6 +41,13 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
+import {
   Table,
   TableBody,
   TableCell,
@@ -47,9 +56,12 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
+import { FAKE_REST_REASON } from "@/lib/flows"
 import {
+  bookingOf,
   CENSUS_RANGE,
   type CensusEnded,
+  type CensusItem,
   type CensusQueue,
   censusCountOf,
   censusReadOf,
@@ -182,7 +194,39 @@ function Census({ initialPcc }: { initialPcc: string }) {
     return false
   }
 
-  /** Una cola: `access`, hasta N PNR con `ignore`, y `exit` si no llegó al fin. */
+  /**
+   * Los rasgos de la reserva de un PNR ya leído (F10.2). No mueve el cursor de la cola, y un
+   * fallo no corta el censo: el PNR queda con `booking: null` y el código del error. En fake no
+   * hay REST, así que ni se llama.
+   */
+  const readBooking = async (
+    queue: number,
+    position: number,
+    pnr: string,
+    pcc: string
+  ) => {
+    if (environment.id === "fake") {
+      dispatch({
+        type: "booking",
+        queue,
+        position,
+        booking: null,
+        error: FAKE_REST_REASON,
+      })
+      return
+    }
+    const run = await call("booking.get", censusBooking, { pnr, pcc })
+    const read = bookingOf(run)
+    dispatch({
+      type: "booking",
+      queue,
+      position,
+      booking: read.booking,
+      error: read.booking === null ? read.error : undefined,
+    })
+  }
+
+  /** Una cola: `access`, hasta N PNR con `ignore` (y su reserva), y `exit` si no llegó al fin. */
   const walkQueue = async (queue: number, pcc: string, limit: number) => {
     dispatch({ type: "enter", queue })
     let run = await call("queue.access", censusAccess, {
@@ -208,6 +252,7 @@ function Census({ initialPcc }: { initialPcc: string }) {
       }
       dispatch({ type: "item", queue, item: step.item })
       read += 1
+      await readBooking(queue, read, step.item.pnr, pcc)
       if (read >= limit || stop.current) {
         const exit = await call("queue.exit", censusExit, {})
         dispatch({ type: "ended", queue, ended: "limit" })
@@ -220,7 +265,7 @@ function Census({ initialPcc }: { initialPcc: string }) {
         })
         return false
       }
-      run = await call("queue.ignore", censusIgnore, {})
+      run = await call("queue.ignore", censusIgnore, { pcc })
     }
   }
 
@@ -484,6 +529,14 @@ function CensusProgress({
   const read = census.queues.reduce((sum, queue) => sum + queue.items.length, 0)
   const walked = census.queues.filter((queue) => queue.ended !== undefined)
   const finished = census.phase === "done" || census.phase === "failed"
+  const [selected, setSelected] = useState<CensusItem>()
+  // El PNR elegido, con lo último que se sabe (la reserva llega después del párrafo).
+  const shown =
+    selected === undefined
+      ? undefined
+      : census.queues
+          .flatMap((queue) => queue.items)
+          .find((item) => item.ref === selected.ref)
 
   if (census.phase === "idle" && census.before === undefined) {
     return (
@@ -548,6 +601,7 @@ function CensusProgress({
                 perQueue={census.perQueue}
                 current={census.current === queue.queue}
                 finished={finished}
+                onSelect={setSelected}
               />
             ))}
           </TableBody>
@@ -560,7 +614,75 @@ function CensusProgress({
         </p>
       )}
       <CountComparison census={census} />
+      <Sheet
+        modal={false}
+        open={shown !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setSelected(undefined)
+        }}
+      >
+        <SheetContent showOverlay={false} className="w-full gap-0 sm:max-w-xl">
+          {shown !== undefined && (
+            <>
+              <SheetHeader className="border-b">
+                <SheetTitle className="font-mono">
+                  {shown.ref} · {shown.pnr}
+                </SheetTitle>
+                <SheetDescription>
+                  Los rasgos que llegan al navegador (ADR-026). El párrafo y la
+                  reserva se quedan en el servidor.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                <JsonTree value={shown} filename={`censo-${shown.ref}.json`} />
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
+  )
+}
+
+/** Un PNR leído: localizador, PIC y si ya tiene los rasgos de la reserva. */
+function ItemBadge({
+  item,
+  onSelect,
+}: {
+  item: CensusItem
+  onSelect: () => void
+}) {
+  const pics = item.pics.map((pic) => String(pic.code).padStart(3, "0"))
+  const booking =
+    item.booking === undefined
+      ? "reserva pendiente"
+      : item.booking === null
+        ? `sin reserva: ${item.bookingError ?? "falló"}`
+        : "con los rasgos de la reserva"
+  const title = [
+    item.ref,
+    item.parseOk ? undefined : "el parser no leyó el párrafo",
+    ...item.pics.map((pic) => `${pic.code} ${pic.text ?? "(texto no válido)"}`),
+    booking,
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  return (
+    <button type="button" onClick={onSelect} title={title}>
+      <Badge variant="outline" className="hover:bg-muted font-mono">
+        {item.pnr}
+        {pics.length > 0 && (
+          <span className="text-muted-foreground">{pics.join(",")}</span>
+        )}
+        {!item.parseOk && <span className="text-destructive">!</span>}
+        {item.booking === null && (
+          <span className="text-muted-foreground">·R?</span>
+        )}
+        {item.booking !== undefined && item.booking !== null && (
+          <span className="text-emerald-600">·R</span>
+        )}
+      </Badge>
+    </button>
   )
 }
 
@@ -569,11 +691,13 @@ function QueueRow({
   perQueue,
   current,
   finished,
+  onSelect,
 }: {
   queue: CensusQueue
   perQueue: number
   current: boolean
   finished: boolean
+  onSelect: (item: CensusItem) => void
 }) {
   const planned = plannedOf(queue, perQueue)
   return (
@@ -610,27 +734,13 @@ function QueueRow({
       </TableCell>
       <TableCell className="whitespace-normal">
         <div className="flex flex-wrap gap-1">
-          {queue.items.map((item) => {
-            const pics = (item.paragraph?.messages ?? []).map((message) =>
-              String(message.instructionCode).padStart(3, "0")
-            )
-            return (
-              <Badge
-                key={item.ref}
-                variant="outline"
-                className="font-mono"
-                title={`${item.ref}${item.parseOk ? "" : " · el parser no leyó el párrafo"}${item.paragraph?.messages.length ? ` · ${item.paragraph.messages.map((m) => `${m.instructionCode} ${m.text}`).join(" / ")}` : ""}`}
-              >
-                {item.locator}
-                {pics.length > 0 && (
-                  <span className="text-muted-foreground">
-                    {pics.join(",")}
-                  </span>
-                )}
-                {!item.parseOk && <span className="text-destructive">!</span>}
-              </Badge>
-            )
-          })}
+          {queue.items.map((item) => (
+            <ItemBadge
+              key={item.ref}
+              item={item}
+              onSelect={() => onSelect(item)}
+            />
+          ))}
         </div>
       </TableCell>
     </TableRow>
