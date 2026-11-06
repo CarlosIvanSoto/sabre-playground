@@ -1,9 +1,5 @@
-import type {
-  QueueCountResponse,
-  QueueEndReason,
-  QueueParagraph,
-  QueueStep,
-} from "sabre-client"
+import type { QueueCountResponse, QueueEndReason } from "sabre-client"
+import type { BookingTraits, ParagraphTraits } from "@/lib/census-traits"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import { failureOf } from "@/lib/queue-desk"
 import { formatQueueRef } from "@/lib/queues"
@@ -15,8 +11,8 @@ import type { StepRun } from "@/lib/step/types"
  * lee hasta N PNR (`ignore`) y sale (`exit`). Nunca `place`, `remove` ni `process`.
  *
  * Este módulo es el estado del recorrido: vive en un `useReducer` de la página, en la memoria del
- * navegador (regla 7), y es puro. Lo leído por cola y por PNR (localizador y párrafo parseado) lo
- * consumen los rasgos (F10.2) y la exportación (F10.3).
+ * navegador (regla 7), y es puro. Por cada PNR guarda solo sus rasgos (F10.2,
+ * `census-traits.ts`), que calcula el servidor; los consume la exportación (F10.3).
  */
 
 /** Las colas que entran al censo (ADR-026). */
@@ -35,20 +31,19 @@ export const MAX_PER_QUEUE = 25
  */
 export type CensusEnded = QueueEndReason | "limit" | "error"
 
-/** Un PNR leído en una cola. */
-export interface CensusItem {
+/** Un PNR leído en una cola: los rasgos del párrafo y, aparte, los de su reserva. */
+export interface CensusItem extends ParagraphTraits {
   /** Posición en la cola, como `Q07-01`. */
   ref: string
   /** Desde 1. */
   position: number
-  /** El localizador real (`QueueItem.locator`). Es el único identificador del censo. */
-  locator: string
-  /** `QueueItem.placedAt`, tal cual (Q-034: parece la última modificación, no la entrada). */
-  placedAt?: string
-  /** `parseQueueParagraph` del párrafo, si no lanzó. */
-  paragraph?: QueueParagraph
-  /** Si el parser leyó el párrafo sin lanzar. */
-  parseOk: boolean
+  /**
+   * Los rasgos de `booking.get`. `undefined` mientras no se pidió; `null` si falló o no se pudo
+   * correr (fake), con la razón en `bookingError`.
+   */
+  booking?: BookingTraits | null
+  /** El código del error de `booking.get`, o por qué no corrió. */
+  bookingError?: string
 }
 
 /** Una cola del censo. */
@@ -63,17 +58,17 @@ export interface CensusQueue {
   failure?: string
 }
 
-/** El párrafo parseado en el servidor, o por qué el parser lanzó. */
-export type CensusParsed =
-  | { ok: true; paragraph: QueueParagraph }
-  | { ok: false; error: string }
-
-/** Lo que devuelven `censusAccess` y `censusIgnore`: el `QueueStep` y el párrafo parseado. */
-export type CensusStep = QueueStep & { parsed?: CensusParsed }
+/**
+ * Lo que devuelven `censusAccess` y `censusIgnore`: el `QueueStep` del SDK con el PNR reducido a
+ * rasgos y sin el mensaje del host. Los avisos van solo con su código.
+ */
+export type CensusStep =
+  | { done: false; item: ParagraphTraits; warnings: string[] }
+  | { done: true; reason: QueueEndReason; warnings: string[] }
 
 /** Un PNR, el fin de cola o un fallo, leído de lo que devolvió `access` o `ignore`. */
 export type CensusRead =
-  | { kind: "item"; item: Omit<CensusItem, "ref" | "position"> }
+  | { kind: "item"; item: ParagraphTraits }
   | { kind: "end"; reason: QueueEndReason }
   /** `closed`: el paso no corrió porque no hay sesión. */
   | { kind: "failed"; failure: string; closed: boolean }
@@ -96,15 +91,22 @@ export function censusReadOf(run: StepRun): CensusRead {
     }
   }
   if (step.done) return { kind: "end", reason: step.reason }
-  return {
-    kind: "item",
-    item: {
-      locator: step.item.locator,
-      placedAt: step.item.placedAt,
-      paragraph: step.parsed?.ok ? step.parsed.paragraph : undefined,
-      parseOk: step.parsed?.ok === true,
-    },
+  return { kind: "item", item: step.item }
+}
+
+/** Los rasgos de la reserva que devolvió `censusBooking`, o el código del fallo. */
+export function bookingOf(
+  run: StepRun
+): { booking: BookingTraits } | { booking: null; error: string } {
+  if (!run.enabled) return { booking: null, error: run.reason }
+  if (!run.step.ok || run.step.result === undefined) {
+    const error = run.step.error
+    return {
+      booking: null,
+      error: error?.code ?? error?.class ?? "la llamada falló",
+    }
   }
+  return { booking: run.step.result as BookingTraits }
 }
 
 /** Una fila del conteo, ya en texto. */
@@ -184,7 +186,15 @@ export type QueueCensusAction =
   /** Cancelado en la confirmación: no se entró a ninguna cola. */
   | { type: "cancel" }
   | { type: "enter"; queue: number }
-  | { type: "item"; queue: number; item: Omit<CensusItem, "ref" | "position"> }
+  | { type: "item"; queue: number; item: ParagraphTraits }
+  /** Los rasgos de `booking.get` de un PNR ya leído. */
+  | {
+      type: "booking"
+      queue: number
+      position: number
+      booking: BookingTraits | null
+      error?: string
+    }
   | { type: "ended"; queue: number; ended: CensusEnded; failure?: string }
   | { type: "stop" }
   | { type: "recount" }
@@ -273,7 +283,7 @@ export function plannedOf(queue: CensusQueue, perQueue: number): number {
 /** El resumen de la confirmación: "Leer hasta 10 PNR y su reserva en 14 colas de P1…". */
 export function censusSummary(census: QueueCensus, pcc: string): string {
   const queues = census.queues.length
-  return `Leer hasta ${census.perQueue} PNR en ${queues} ${queues === 1 ? "cola" : "colas"} de ${pcc}, solo lectura (count, access, ignore y exit).`
+  return `Leer hasta ${census.perQueue} PNR y su reserva en ${queues} ${queues === 1 ? "cola" : "colas"} de ${pcc}, solo lectura (count, access, ignore, exit y booking.get).`
 }
 
 function updateQueue(
@@ -341,6 +351,15 @@ export function queueCensusReducer(
           ],
         }
       })
+    case "booking":
+      return updateQueue(state, action.queue, (row) => ({
+        ...row,
+        items: row.items.map((item) =>
+          item.position === action.position
+            ? { ...item, booking: action.booking, bookingError: action.error }
+            : item
+        ),
+      }))
     case "ended":
       return {
         ...updateQueue(state, action.queue, (row) => ({
