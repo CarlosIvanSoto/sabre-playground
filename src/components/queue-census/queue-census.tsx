@@ -1,6 +1,7 @@
 "use client"
 
-import { Play, Square } from "lucide-react"
+import { ExternalLink, Play, Square } from "lucide-react"
+import Link from "next/link"
 import { useEffect, useReducer, useRef, useState } from "react"
 import {
   censusAccess,
@@ -15,6 +16,7 @@ import { JsonTree } from "@/components/custom/json-tree"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
 import { CensusExport } from "@/components/queue-census/census-export"
+import { CensusSummaryView } from "@/components/queue-census/census-summary"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { DeskPcc } from "@/components/queue-desk/desk-queues"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
@@ -31,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -58,6 +60,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { buildCensusExport } from "@/lib/census-export"
+import { summarizeCensus } from "@/lib/census-summary"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import { FAKE_REST_REASON } from "@/lib/flows"
 import {
@@ -80,7 +84,7 @@ import {
   type QueueCensus as QueueCensusState,
   queueCensusReducer,
 } from "@/lib/queue-census"
-import { failureOf, shownPcc } from "@/lib/queue-desk"
+import { bookingHref, failureOf, shownPcc } from "@/lib/queue-desk"
 import type { StepRun } from "@/lib/step/types"
 
 /**
@@ -135,6 +139,10 @@ function Census({ initialPcc }: { initialPcc: string }) {
   const running = isRunning(census)
   const perQueue = parsePerQueue(perQueueText)
   const pcc = shownPcc(census.pcc, sessionPcc)
+  /** El alias del PCC en la exportación. El resumen y la exportación salen del mismo JSON. */
+  const [alias, setAlias] = useState("P1")
+  const doc = buildCensusExport(census, alias.trim().toUpperCase())
+  const read = census.queues.reduce((sum, queue) => sum + queue.items.length, 0)
 
   // `/queue-census/<PCC de la sesión>` es el PCC de la sesión: se normaliza a vacío.
   useEffect(() => {
@@ -475,9 +483,19 @@ function Census({ initialPcc }: { initialPcc: string }) {
           </CardContent>
         </Card>
       </div>
-      {(census.phase === "done" || census.phase === "failed") &&
-        census.queues.some((queue) => queue.items.length > 0) && (
-          <CensusExport census={census} pccs={[sessionPcc, census.pcc]} />
+      {doc !== undefined && read > 0 && (
+        <CensusSummaryView summary={summarizeCensus(doc)} pcc={census.pcc} />
+      )}
+      {doc !== undefined &&
+        read > 0 &&
+        (census.phase === "done" || census.phase === "failed") && (
+          <CensusExport
+            census={census}
+            doc={doc}
+            alias={alias}
+            onAliasChange={setAlias}
+            pccs={[sessionPcc, census.pcc]}
+          />
         )}
       <div className="overflow-hidden rounded-lg border">
         <ActivityBar since={since} />
@@ -651,6 +669,19 @@ function CensusProgress({
                 </SheetDescription>
               </SheetHeader>
               <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+                <Link
+                  href={bookingHref(shown.pnr, census.pcc)}
+                  target="_blank"
+                  rel="noopener"
+                  className={buttonVariants({
+                    variant: "outline",
+                    size: "sm",
+                    className: "self-start",
+                  })}
+                >
+                  <ExternalLink />
+                  Abrir la reserva en /booking
+                </Link>
                 <Field orientation="horizontal">
                   <Checkbox
                     id="census-flag"
