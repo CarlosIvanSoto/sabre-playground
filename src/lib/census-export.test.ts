@@ -278,6 +278,28 @@ describe("validateCensusExport", () => {
     assert.deepEqual(paths(doc), [])
   })
 
+  it("acepta una marca de tarifa de seis caracteres", () => {
+    const doc = mutate((doc) => {
+      doc.queues[0].items[0].booking.fares[0].brand = "BASICX"
+    })
+    assert.deepEqual(paths(doc), [])
+  })
+
+  it("rechaza una marca de tarifa que es un localizador leído", () => {
+    const doc = mutate((doc) => {
+      doc.queues[0].items[0].booking.fares[0].brand = "TESTAB"
+    })
+    assert.deepEqual(paths(doc), ["queues[0].items[0].booking.fares[0].brand"])
+  })
+
+  it("acepta queuePlaceRemarks en null (remark fuera de la expresión)", () => {
+    const doc = mutate((doc) => {
+      doc.queues[0].items[0].booking.queuePlaceRemarks = null
+      doc.queues[0].items[0].booking.queuePlaceCount = 2
+    })
+    assert.deepEqual(paths(doc), [])
+  })
+
   it("rechaza un pnr que no leyó la consola", () => {
     const doc = mutate((doc) => {
       doc.queues[0].items[1].pnr = "ZZZZZZ"

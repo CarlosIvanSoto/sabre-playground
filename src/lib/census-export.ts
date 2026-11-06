@@ -203,13 +203,23 @@ export interface ValidationContext {
 type Rule =
   | { kind: "int"; min?: number; max?: number; nullable?: boolean }
   | { kind: "bool"; nullable?: boolean }
-  | { kind: "string"; pattern: RegExp; nullable?: boolean }
+  | {
+      kind: "string"
+      pattern: RegExp
+      nullable?: boolean
+      /**
+       * Un código de proveedor que puede tener seis letras o dígitos (una marca de tarifa:
+       * `BASICX`). Su expresión ya es cerrada, así que no se le aplica la regla de "forma de
+       * localizador"; sí la de no contener un localizador leído ni un PCC.
+       */
+      code?: boolean
+    }
   | {
       kind: "literal"
       values: readonly (string | number)[]
       nullable?: boolean
     }
-  | { kind: "array"; of: Rule; max?: number }
+  | { kind: "array"; of: Rule; max?: number; nullable?: boolean }
   | { kind: "object"; fields: Record<string, Rule>; nullable?: boolean }
   | { kind: "record"; key: RegExp; value: Rule }
 
@@ -312,7 +322,7 @@ const BOOKING: Rule = {
         isNegotiatedFare: boolOrNull,
         hasTourCode: bool,
         hasAccountCode: bool,
-        brand: textOrNull(P.brand),
+        brand: { kind: "string", pattern: P.brand, nullable: true, code: true },
         travelerTypeMismatch: boolOrNull,
       })
     ),
@@ -362,8 +372,10 @@ const BOOKING: Rule = {
     ssr: array(object({ code: text(P.ssr), status: textOrNull(P.status) })),
     osi: object({ count: int(0), carriers: array(text(P.carrier)) }),
     remarks: { kind: "record", key: P.enumValue, value: int(0) },
+    // `null` si algún remark `QUEUE_PLACE` no cumple la expresión cerrada: queda solo el conteo.
     queuePlaceRemarks: {
       kind: "array",
+      nullable: true,
       of: object({ queue: int(0, 511), pic: PIC_CODE }),
       max: 100,
     },
@@ -475,13 +487,19 @@ export function validateCensusExport(
   const checkString = (
     value: string,
     path: string,
-    ref: string | undefined
+    ref: string | undefined,
+    code = false
   ) => {
     const upper = value.toUpperCase()
     // Las líneas del anexo ya están enmascaradas (`XXXXXX` es un localizador tapado): se
-    // revisan aparte, con `isSafeLine`.
+    // revisan aparte, con `isSafeLine`. Un código de proveedor (`code`) tiene su expresión.
     const annexLine = path.includes(".lines[")
-    if (!annexLine && LOCATOR_SHAPE.test(value) && !SIX_CHAR_ENUMS.has(value)) {
+    if (
+      !annexLine &&
+      !code &&
+      LOCATOR_SHAPE.test(value) &&
+      !SIX_CHAR_ENUMS.has(value)
+    ) {
       report(path, ref, `tiene forma de localizador: ${describe(value)}`)
       return
     }
@@ -535,7 +553,7 @@ export function validateCensusExport(
           report(path, ref, `no pasa ${rule.pattern}: ${describe(value)}`)
           return
         }
-        if (!path.endsWith(".pnr")) checkString(value, path, ref)
+        if (!path.endsWith(".pnr")) checkString(value, path, ref, rule.code)
         return
       case "literal":
         if (!rule.values.includes(value as string | number)) {
