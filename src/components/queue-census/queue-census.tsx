@@ -2,7 +2,7 @@
 
 import { ExternalLink, Play, Square } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useReducer, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   censusAccess,
   censusBooking,
@@ -16,6 +16,7 @@ import { JsonTree } from "@/components/custom/json-tree"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
 import { CensusExport } from "@/components/queue-census/census-export"
+import { useCensus } from "@/components/queue-census/census-provider"
 import { CensusSummaryView } from "@/components/queue-census/census-summary"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { DeskPcc } from "@/components/queue-desk/desk-queues"
@@ -76,13 +77,11 @@ import {
   countChanges,
   DEFAULT_PER_QUEUE,
   inCensusRange,
-  initialQueueCensus,
   isRunning,
   MAX_PER_QUEUE,
   parsePerQueue,
   plannedOf,
   type QueueCensus as QueueCensusState,
-  queueCensusReducer,
 } from "@/lib/queue-census"
 import { bookingHref, failureOf, shownPcc } from "@/lib/queue-desk"
 import type { StepRun } from "@/lib/step/types"
@@ -123,10 +122,9 @@ function Census({ initialPcc }: { initialPcc: string }) {
   const { environment } = useEnvironment()
   const { record } = useHistory()
   const { status, error, refresh } = useSessionStatus()
-  const [census, dispatch] = useReducer(queueCensusReducer, undefined, () =>
-    initialQueueCensus(initialPcc)
-  )
-  const [perQueueText, setPerQueueText] = useState(String(DEFAULT_PER_QUEUE))
+  // El censo vive en el layout (F10.5): la mesa le suma PNR con "Al censo".
+  const { census, dispatch } = useCensus()
+  const [perQueueText, setPerQueueText] = useState(String(census.perQueue))
   const [unlocked, setUnlocked] = useState(false)
   const [since] = useState(() => new Date().toISOString())
   /** Se apretó parar, o la página se desmontó: el recorrido lo mira entre llamada y llamada. */
@@ -145,17 +143,33 @@ function Census({ initialPcc }: { initialPcc: string }) {
   const read = census.queues.reduce((sum, queue) => sum + queue.items.length, 0)
 
   // `/queue-census/<PCC de la sesión>` es el PCC de la sesión: se normaliza a vacío.
+  // Es el mismo PCC, así que no se borra nada.
   useEffect(() => {
     if (sessionPcc !== "" && census.pcc === sessionPcc && !running) {
-      dispatch({ type: "pcc", pcc: "" })
+      dispatch({ type: "samePcc" })
       window.history.replaceState(null, "", "/queue-census")
     }
-  }, [sessionPcc, census.pcc, running])
+  }, [sessionPcc, census.pcc, running, dispatch])
 
-  // Al desmontar (otro entorno, otra página), el recorrido en curso para en la siguiente llamada.
+  // `/queue-census/<PCC>`: ese PCC de trabajo, salvo que ya haya un censo con datos (de la mesa
+  // o de un recorrido anterior), que no se borra por abrir la página. Solo al montar.
+  const initial = useRef(initialPcc)
+  useEffect(() => {
+    const pcc = initial.current
+    initial.current = ""
+    if (pcc !== "" && census.takenAt === undefined && pcc !== census.pcc) {
+      dispatch({ type: "pcc", pcc })
+    }
+  }, [census.takenAt, census.pcc, dispatch])
+
+  // Al desmontar (otro entorno, otra página), el recorrido en curso para en la siguiente llamada:
+  // sale de la cola, cuenta de nuevo y queda como parado en el censo del layout.
+  const stopOnLeave = useRef(dispatch)
+  stopOnLeave.current = dispatch
   useEffect(() => {
     return () => {
       stop.current = true
+      stopOnLeave.current({ type: "stop" })
     }
   }, [])
 
@@ -469,6 +483,13 @@ function Census({ initialPcc }: { initialPcc: string }) {
             {!running && startReason !== undefined && (
               <p className="text-muted-foreground text-xs">{startReason}</p>
             )}
+            {!running && read > 0 && (
+              <p className="text-muted-foreground text-xs">
+                Iniciar reemplaza el censo actual ({read} PNR
+                {census.walked ? "" : ", agregados desde la mesa"}). Exporta
+                antes si lo quieres conservar.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card className="min-w-0">
@@ -636,6 +657,7 @@ function CensusProgress({
                 perQueue={census.perQueue}
                 current={census.current === queue.queue}
                 finished={finished}
+                walked={census.walked}
                 onSelect={setSelected}
               />
             ))}
@@ -753,12 +775,15 @@ function QueueRow({
   perQueue,
   current,
   finished,
+  walked,
   onSelect,
 }: {
   queue: CensusQueue
   perQueue: number
   current: boolean
   finished: boolean
+  /** Si hubo recorrido: sin él, las colas vienen de "Al censo" en la mesa. */
+  walked: boolean
   onSelect: (item: CensusItem) => void
 }) {
   const planned = plannedOf(queue, perQueue)
@@ -790,7 +815,11 @@ function QueueRow({
           <Badge>leyendo</Badge>
         ) : (
           <span className="text-muted-foreground text-xs">
-            {finished ? "sin recorrer" : "pendiente"}
+            {!finished
+              ? "pendiente"
+              : walked
+                ? "sin recorrer"
+                : "desde la mesa"}
           </span>
         )}
       </TableCell>

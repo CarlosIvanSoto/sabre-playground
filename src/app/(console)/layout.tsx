@@ -4,6 +4,7 @@ import { FlowGate } from "@/components/console/flow-gate"
 import { EnvironmentProvider } from "@/components/environment/environment-provider"
 import { EnvironmentSwitcher } from "@/components/environment/environment-switcher"
 import { HistoryProvider } from "@/components/history/history-provider"
+import { CensusProvider } from "@/components/queue-census/census-provider"
 import {
   SidebarInset,
   SidebarProvider,
@@ -25,20 +26,22 @@ export default async function ConsoleLayout({
   return (
     <EnvironmentProvider options={getConsoleEnvironments()}>
       <HistoryProvider>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <header className="bg-background sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-4">
-              <SidebarTrigger className="-ms-1" />
-              <div className="ms-auto">
-                <EnvironmentSwitcher />
+        <CensusProvider>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset>
+              <header className="bg-background sticky top-0 z-10 flex h-14 shrink-0 items-center gap-2 border-b px-4">
+                <SidebarTrigger className="-ms-1" />
+                <div className="ms-auto">
+                  <EnvironmentSwitcher />
+                </div>
+              </header>
+              <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
+                <FlowGate>{children}</FlowGate>
               </div>
-            </header>
-            <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
-              <FlowGate>{children}</FlowGate>
-            </div>
-          </SidebarInset>
-        </SidebarProvider>
+            </SidebarInset>
+          </SidebarProvider>
+        </CensusProvider>
       </HistoryProvider>
     </EnvironmentProvider>
   )

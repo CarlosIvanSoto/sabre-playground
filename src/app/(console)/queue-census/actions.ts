@@ -170,6 +170,45 @@ export async function censusExit(
   )
 }
 
+const screenSchema = z.object({
+  item: z.object({
+    locator: z.string().regex(/^[A-Z0-9]{6}$/),
+    placedAt: z.string().max(40).optional(),
+    placedBy: z
+      .object({
+        agentSine: z.string().max(20).optional(),
+        pseudoCityCode: z.string().max(10).optional(),
+      })
+      .optional(),
+    paragraph: z.array(z.string().max(400)).max(1000),
+  }),
+  pcc: optionalPcc,
+})
+
+/**
+ * "Al censo" desde la mesa (F10.5, #99): los rasgos del PNR en pantalla, con la misma derivación
+ * que el recorrido. Recibe el `QueueItem` que la mesa ya tiene (lo devolvió `access` o
+ * `ignore`), así que no llama a Sabre y no mueve el cursor de la cola. Devuelve solo
+ * `ParagraphTraits`.
+ */
+export async function censusFromScreen(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const parsed = screenSchema.safeParse(input)
+    if (!parsed.success) return INVALID
+    const { item, pcc } = parsed.data
+    const context = await sessionContext(id, pcc)
+    const step = await runStep(async () => {
+      const result = censusStepOf({ done: false, item, warnings: [] }, context)
+      if (result.done) throw new TypeError("sin PNR")
+      return result.item
+    })
+    return censusRun({ enabled: true, step })
+  })
+}
+
 /**
  * La hora del censo (`takenAt` de `queue-census/1`): el reloj del servidor de la consola, en UTC
  * (ADR-026). El SDK no expone el `eb:Timestamp` de Sabre.

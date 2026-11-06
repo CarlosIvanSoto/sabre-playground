@@ -149,7 +149,8 @@ export function buildCensusExport(
     env: census.environment,
     pcc: alias,
     sample: { perQueue: census.perQueue, range: [0, 49] },
-    complete: census.phase === "done" && !census.stopped,
+    // Un recorrido entero; no un censo armado solo desde la mesa.
+    complete: census.walked && census.phase === "done" && !census.stopped,
     queues,
     annex: {
       paragraphs: census.queues.flatMap((queue) =>

@@ -167,6 +167,8 @@ export interface QueueCensus {
   current?: number
   /** Se apretó parar. */
   stopped: boolean
+  /** Si hubo un recorrido; `false` en un censo armado solo desde la mesa (F10.5). */
+  walked: boolean
   /** Por qué se cortó, en `failed`, o por qué se canceló, en `idle`. */
   failure?: string
   /** Por qué falló el `count` de después, si falló. El censo queda igual. */
@@ -206,18 +208,41 @@ export type QueueCensusAction =
   | { type: "fail"; failure: string; at: string }
   /** Cambiar el PCC de trabajo, fuera de un recorrido. Borra el censo anterior. */
   | { type: "pcc"; pcc: string }
+  /** El PCC de trabajo era el de la sesión escrito a mano: pasa a vacío sin borrar nada. */
+  | { type: "samePcc" }
   /** Cambiar N, fuera de un recorrido. */
   | { type: "perQueue"; perQueue: number }
   /** La hora del servidor al arrancar (`takenAt`). */
   | { type: "takenAt"; at: string }
   /** Marcar o desmarcar un PNR para el anexo. */
   | { type: "flag"; ref: string; flagged: boolean }
+  /**
+   * "Al censo" desde la mesa (F10.5): el PNR en pantalla, con los mismos rasgos que uno del
+   * recorrido. Si no hay censo, empieza uno. `count` es el conteo de la cola según la mesa.
+   */
+  | {
+      type: "add"
+      environment: ConsoleEnvironmentId
+      pcc: string
+      takenAt: string
+      queue: number
+      count: number
+      item: ParagraphTraits
+    }
 
 export function initialQueueCensus(
   pcc = "",
   perQueue = DEFAULT_PER_QUEUE
 ): QueueCensus {
-  return { phase: "idle", pcc, perQueue, queues: [], named: [], stopped: false }
+  return {
+    phase: "idle",
+    pcc,
+    perQueue,
+    queues: [],
+    named: [],
+    stopped: false,
+    walked: false,
+  }
 }
 
 /** Si el censo está en curso: no se cambia el PCC ni N, y se puede parar. */
@@ -235,6 +260,36 @@ export function parsePerQueue(text: string): number | undefined {
   if (!/^\d{1,2}$/.test(text.trim())) return undefined
   const value = Number(text)
   return value >= 1 && value <= MAX_PER_QUEUE ? value : undefined
+}
+
+/**
+ * Por qué no se puede agregar un PNR desde la mesa (F10.5), o `undefined` si se puede. Sin
+ * duplicados: el mismo PNR en la misma cola entra una sola vez.
+ */
+export function addReason(
+  census: QueueCensus,
+  { pcc, queue, pnr }: { pcc: string; queue: number; pnr: string }
+): string | undefined {
+  if (isRunning(census)) {
+    return "Hay un recorrido en curso en /queue-census."
+  }
+  if (
+    !Number.isInteger(queue) ||
+    queue < CENSUS_RANGE[0] ||
+    queue > CENSUS_RANGE[1]
+  ) {
+    return `El censo solo lleva las colas ${CENSUS_RANGE[0]}–${CENSUS_RANGE[1]}.`
+  }
+  if (census.takenAt !== undefined && census.pcc !== pcc) {
+    return `El censo en curso es de otro PCC de trabajo (${census.pcc || "el de la sesión"}).`
+  }
+  const row = census.queues.find((item) => item.queue === queue)
+  const same = row?.items.find((item) => item.pnr === pnr)
+  if (same !== undefined) return `Ya está en el censo (${same.ref}).`
+  if (row !== undefined && row.items.length >= MAX_PER_QUEUE) {
+    return `La cola ${queue} ya tiene ${MAX_PER_QUEUE} PNR en el censo.`
+  }
+  return undefined
 }
 
 /** `Q07-01`: la posición en la cola, con dos dígitos (N llega a 25). */
@@ -319,6 +374,7 @@ export function queueCensusReducer(
         environment: action.environment,
         pcc: action.pcc,
         startedAt: action.at,
+        walked: true,
       }
     case "counted":
       if (action.when === "after") return { ...state, after: action.count }
@@ -400,11 +456,51 @@ export function queueCensusReducer(
     case "pcc":
       if (isRunning(state) || action.pcc === state.pcc) return state
       return initialQueueCensus(action.pcc, state.perQueue)
+    case "samePcc":
+      return state.pcc === "" ? state : { ...state, pcc: "" }
     case "perQueue":
       if (isRunning(state)) return state
       return { ...state, perQueue: action.perQueue }
     case "takenAt":
       return { ...state, takenAt: action.at }
+    case "add": {
+      if (
+        addReason(state, {
+          pcc: action.pcc,
+          queue: action.queue,
+          pnr: action.item.pnr,
+        }) !== undefined
+      ) {
+        return state
+      }
+      const base: QueueCensus =
+        state.takenAt === undefined
+          ? {
+              ...initialQueueCensus(action.pcc, state.perQueue),
+              phase: "done",
+              environment: action.environment,
+              takenAt: action.takenAt,
+              startedAt: action.takenAt,
+            }
+          : state
+      const exists = base.queues.some((row) => row.queue === action.queue)
+      const queues = exists
+        ? base.queues
+        : [
+            ...base.queues,
+            { queue: action.queue, count: action.count, items: [] },
+          ]
+      return updateQueue({ ...base, queues }, action.queue, (row) => {
+        const position = row.items.length + 1
+        return {
+          ...row,
+          items: [
+            ...row.items,
+            { ...action.item, position, ref: itemRef(row.queue, position) },
+          ],
+        }
+      })
+    }
     case "flag":
       return {
         ...state,
