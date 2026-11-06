@@ -66,6 +66,11 @@ export interface ParagraphTraits {
   parseOk: boolean
   /** Cuántas líneas quedaron en `unparsed`. */
   unparsedLines: number | null
+  /**
+   * El párrafo enmascarado con la regla de #96 (ADR-018): la lista blanca tal cual y el resto con
+   * letras a `X` y dígitos a `9`. Solo entra a la exportación si el usuario marca el PNR (F10.3).
+   */
+  maskedParagraph: string[]
 }
 
 export interface FlightTraits {

@@ -5,6 +5,7 @@ import { useEffect, useReducer, useRef, useState } from "react"
 import {
   censusAccess,
   censusBooking,
+  censusClock,
   censusCount,
   censusExit,
   censusIgnore,
@@ -13,6 +14,7 @@ import { sessionStatus } from "@/app/(console)/session/actions"
 import { JsonTree } from "@/components/custom/json-tree"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
+import { CensusExport } from "@/components/queue-census/census-export"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { DeskPcc } from "@/components/queue-desk/desk-queues"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
@@ -37,6 +39,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
@@ -301,6 +304,7 @@ function Census({ initialPcc }: { initialPcc: string }) {
       perQueue,
       at: now(),
     })
+    dispatch({ type: "takenAt", at: await censusClock() })
     const before = await call("queue.count", censusCount, { pcc })
     const count = censusCountOf(before)
     if (count === undefined) {
@@ -461,10 +465,20 @@ function Census({ initialPcc }: { initialPcc: string }) {
         </Card>
         <Card className="min-w-0">
           <CardContent>
-            <CensusProgress census={census} pcc={pcc} />
+            <CensusProgress
+              census={census}
+              pcc={pcc}
+              onFlag={(ref, flagged) =>
+                dispatch({ type: "flag", ref, flagged })
+              }
+            />
           </CardContent>
         </Card>
       </div>
+      {(census.phase === "done" || census.phase === "failed") &&
+        census.queues.some((queue) => queue.items.length > 0) && (
+          <CensusExport census={census} pccs={[sessionPcc, census.pcc]} />
+        )}
       <div className="overflow-hidden rounded-lg border">
         <ActivityBar since={since} />
       </div>
@@ -518,9 +532,12 @@ const ENDED_LABEL: Record<CensusEnded, string> = {
 function CensusProgress({
   census,
   pcc,
+  onFlag,
 }: {
   census: QueueCensusState
   pcc: string
+  /** Marcar un PNR para el anexo de la exportación (F10.3). */
+  onFlag: (ref: string, flagged: boolean) => void
 }) {
   const planned = census.queues.reduce(
     (sum, queue) => sum + plannedOf(queue, census.perQueue),
@@ -633,7 +650,20 @@ function CensusProgress({
                   reserva se quedan en el servidor.
                 </SheetDescription>
               </SheetHeader>
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="census-flag"
+                    checked={shown.flagged === true}
+                    onCheckedChange={(checked) =>
+                      onFlag(shown.ref, checked === true)
+                    }
+                  />
+                  <FieldLabel htmlFor="census-flag" className="font-normal">
+                    Marcar para el anexo: el párrafo enmascarado (regla de #96)
+                    entra a la exportación
+                  </FieldLabel>
+                </Field>
                 <JsonTree value={shown} filename={`censo-${shown.ref}.json`} />
               </div>
             </>
@@ -681,6 +711,7 @@ function ItemBadge({
         {item.booking !== undefined && item.booking !== null && (
           <span className="text-emerald-600">·R</span>
         )}
+        {item.flagged === true && <span className="text-amber-600">·A</span>}
       </Badge>
     </button>
   )
