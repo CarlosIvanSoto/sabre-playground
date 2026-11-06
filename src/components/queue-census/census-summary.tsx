@@ -35,7 +35,7 @@ function counts(record: Record<string, number>): string {
 
 /**
  * La vista de resumen del censo (F10.4, #98; ADR-026): la matriz cola × PIC y lo de cada cola,
- * calculados del mismo `queue-census/1` que se exporta. No clasifica las colas: eso es del wiki.
+ * calculados del mismo `queue-census/2` que se exporta. No clasifica las colas: eso es del wiki.
  */
 export function CensusSummaryView({
   summary,

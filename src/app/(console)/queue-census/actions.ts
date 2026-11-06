@@ -210,7 +210,7 @@ export async function censusFromScreen(
 }
 
 /**
- * La hora del censo (`takenAt` de `queue-census/1`): el reloj del servidor de la consola, en UTC
+ * La hora del censo (`takenAt` de `queue-census/2`): el reloj del servidor de la consola, en UTC
  * (ADR-026). El SDK no expone el `eb:Timestamp` de Sabre.
  */
 export async function censusClock(): Promise<string> {

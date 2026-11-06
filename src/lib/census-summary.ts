@@ -2,7 +2,7 @@ import type { QueueCensusExport } from "./census-export.ts"
 
 /**
  * La vista de resumen del censo (F10.4, #98; ADR-026, "Vista de resumen en la consola"). Se
- * calcula del mismo `queue-census/1` que se exporta, así los números coinciden con el JSON.
+ * calcula del mismo `queue-census/2` que se exporta, así los números coinciden con el JSON.
  *
  * No clasifica ni nombra la función de una cola: eso lo hace el ingest en el wiki. Solo cuenta.
  */
@@ -54,7 +54,7 @@ export interface CensusSummary {
 
 /**
  * Los estados de segmento de un cambio de horario (ADR-026, "Cómo se clasifica una cola"): `UN`
- * el vuelo que cambió, `TK` el nuevo, `SC` y `WK`. No se usa `scheduleChangeMinutes`: según el
+ * el vuelo que cambió, `TK` el nuevo, `SC` y `WK`. No se usa `departureDelayMinutes`: según el
  * spec v1.33, `updatedDeparture*` es la salida estimada o real (demoras), no el cambio de horario
  * del itinerario (Q-091).
  */

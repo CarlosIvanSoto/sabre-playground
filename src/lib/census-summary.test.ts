@@ -4,7 +4,7 @@ import type { QueueCensusExport } from "./census-export.ts"
 import { booking, census } from "./census-fixture.ts"
 import { summarizeCensus } from "./census-summary.ts"
 
-/** La vista de resumen (F10.4, #98), sobre el mismo `queue-census/1` que se exporta. */
+/** La vista de resumen (F10.4, #98), sobre el mismo `queue-census/2` que se exporta. */
 
 /** El censo de prueba, con una segunda cola que repite un PIC y un PNR. */
 function twoQueues(): QueueCensusExport {
@@ -16,7 +16,7 @@ function twoQueues(): QueueCensusExport {
     ...changed.flights[0],
     status: "UN",
     carrier: "DL",
-    scheduleChangeMinutes: 45,
+    departureDelayMinutes: 45,
   }
   doc.queues.push({
     queue: 9,
@@ -104,7 +104,7 @@ describe("summarizeCensus", () => {
     booking.flights[0] = {
       ...booking.flights[0],
       status: "TK",
-      scheduleChangeMinutes: null,
+      departureDelayMinutes: null,
     }
     const [seven] = summarizeCensus(doc).queues
     assert.equal(seven?.pctScheduleChange, 100)

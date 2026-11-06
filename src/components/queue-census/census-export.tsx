@@ -29,7 +29,7 @@ import type { QueueCensus } from "@/lib/queue-census"
 const SHOWN_ISSUES = 20
 
 /**
- * Exportar el censo (F10.3, #97; ADR-026): `queue-census/1`, solo si pasa el validador que falla
+ * Exportar el censo (F10.3, #97; ADR-026): `queue-census/2`, solo si pasa el validador que falla
  * cerrado y después de revisar los textos PIC distintos. Se descarga o se copia desde el
  * navegador: nada se escribe en disco del lado del servidor, y el archivo nunca va al repo.
  */
@@ -89,7 +89,7 @@ export function CensusExport({
       <CardHeader>
         <CardTitle>Exportar censo</CardTitle>
         <CardDescription>
-          <code>queue-census/1</code>, con el localizador real en{" "}
+          <code>queue-census/2</code>, con el localizador real en{" "}
           <code>pnr</code>. Va a <code>raw/sources/</code> del wiki, que es
           privado; nunca a este repo. Se descarga o se copia desde el navegador.
         </CardDescription>
