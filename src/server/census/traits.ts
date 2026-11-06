@@ -6,7 +6,7 @@ import {
   type QueueParagraph,
   resolveHostDate,
 } from "sabre-client"
-import { SAFE_LINES } from "@/lib/census-export"
+import { maskParagraph } from "@/lib/census-export"
 import {
   type AccountingTraits,
   type AncillaryTraits,
@@ -154,18 +154,6 @@ function placedAgeHours(
   const [date, time] = resolved.split("T")
   const hours = hoursFrom(now, date, time)
   return hours === null ? null : -hours
-}
-
-/**
- * El párrafo con la regla de #96 (ADR-018): las líneas de la lista blanca quedan tal cual; en las
- * demás, letras a `X` y dígitos a `9`. La línea de firma se tapa entera, localizador incluido.
- */
-export function maskParagraph(lines: readonly string[]): string[] {
-  return lines.map((line) =>
-    SAFE_LINES.some((pattern) => pattern.test(line))
-      ? line
-      : line.replace(/\p{L}/gu, "X").replace(/\p{N}/gu, "9")
-  )
 }
 
 /** Los rasgos del PNR en pantalla, del `QueueItem` y su párrafo parseado. */

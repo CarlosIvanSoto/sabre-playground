@@ -5,6 +5,7 @@ import {
   censusFileName,
   distinctPicTexts,
   isSafeLine,
+  maskParagraph,
   type QueueCensusExport,
   TAKEN_AT_SOURCE,
   validateCensusExport,
@@ -357,6 +358,13 @@ describe("validateCensusExport", () => {
     assert.deepEqual(paths(doc), ["annex.paragraphs[0].lines[6]"])
   })
 
+  it("rechaza una línea de lista con localizador en el anexo", () => {
+    const doc = mutate((doc) => {
+      doc.annex.paragraphs[0].lines.push("100  ABC123  PLT  MAM  01JUN26  1948")
+    })
+    assert.deepEqual(paths(doc), ["annex.paragraphs[0].lines[6]"])
+  })
+
   it("rechaza un anexo que no coincide con el PNR de su referencia", () => {
     const doc = mutate((doc) => {
       doc.annex.paragraphs[0].pnr = "TESTAB"
@@ -376,6 +384,14 @@ describe("isSafeLine", () => {
     assert.ok(isSafeLine("END OF DISPLAY FOR REQUESTED DATA"))
     assert.ok(isSafeLine("XXXX@XXXX.XXX"))
     assert.ok(isSafeLine(""))
+  })
+
+  it("no deja pasar una línea de lista con localizador", () => {
+    const line = "100  ABC123  PLT  MAM  01JUN26  1948"
+    assert.ok(!isSafeLine(line))
+    assert.deepEqual(maskParagraph([line]), [
+      "999  XXX999  XXX  XXX  99XXX99  9999",
+    ])
   })
 
   it("no deja pasar una línea con datos", () => {

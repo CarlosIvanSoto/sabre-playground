@@ -80,7 +80,9 @@ export interface QueueCensusExport {
  */
 export const SAFE_LINES: readonly RegExp[] = [
   /^\s*$/,
-  /^\s*\d{3}\s{2,}[A-Z][A-Z0-9 ,./-]*$/,
+  // El aviso PIC, sin dígitos después del número: una línea de lista como
+  // `100  ABC123  PLT …` trae un localizador y no pasa (misma regla que `sabre-client`).
+  /^\s*\d{3}\s{2,}[A-Z][A-Z ,./-]*$/,
   /^\s*END OF DISPLAY FOR REQUESTED DATA\s*$/,
   /^\s*(TKT\/TIME LIMIT|PHONES|REMARKS|ADDRESS|INVOICED|GENERAL FACTS|[A-Z0-9]{2} FACTS|NO ITIN)\s*$/,
   /^\s*PASSENGER EMAIL DATA EXISTS\s+\*PE TO DISPLAY ALL\s*$/,
@@ -88,6 +90,18 @@ export const SAFE_LINES: readonly RegExp[] = [
 
 /** Una línea enmascarada: sin letras ni dígitos, salvo `X` y `9`. */
 const MASKED_LINE = /^[^\p{L}\p{N}]*(?:[X9][^\p{L}\p{N}]*)*$/u
+
+/**
+ * El párrafo con la regla de #96 (ADR-018): las líneas de la lista blanca quedan tal cual; en las
+ * demás, letras a `X` y dígitos a `9`. La línea de firma se tapa entera, localizador incluido.
+ */
+export function maskParagraph(lines: readonly string[]): string[] {
+  return lines.map((line) =>
+    SAFE_LINES.some((pattern) => pattern.test(line))
+      ? line
+      : line.replace(/\p{L}/gu, "X").replace(/\p{N}/gu, "9")
+  )
+}
 
 export function isSafeLine(line: string): boolean {
   return (
