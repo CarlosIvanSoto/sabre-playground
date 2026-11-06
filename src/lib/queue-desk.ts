@@ -14,8 +14,8 @@ import type { StepRun } from "@/lib/step/types"
  *
  * El cursor de la cola es el mismo `queue-journey` del flujo 6. La mesa le suma el conteo de
  * la izquierda, el total de la cola al entrar (para `n de N`) y el último paso del cursor, que
- * es lo que se ve en el centro. F9.3 le suma los destinos recientes y el conteo estimado, y
- * F9.4, el localizador abierto en la hoja de reserva. Como la mesa es una sola página, no
+ * es lo que se ve en el centro, los destinos recientes y el conteo estimado de mover y sacar
+ * (F9.3), y el localizador abierto en la hoja de reserva (F9.4). Como la mesa es una sola página, no
  * depende de ADR-024 (Zustand).
  */
 
@@ -69,6 +69,8 @@ export interface QueueDesk {
   screen?: DeskScreen
   /** Las últimas combinaciones de cola y PIC de `place`, la más nueva primero. */
   recent: DeskDestination[]
+  /** El localizador abierto en la hoja de reserva (F9.4), si está abierta. */
+  booking?: string
 }
 
 export type QueueDeskAction =
@@ -87,6 +89,8 @@ export type QueueDeskAction =
     }
   /** La sesión se cerró, venció o cambió el entorno: no hay cursor. */
   | { type: "sessionGone" }
+  /** Abrir la hoja de reserva con el localizador en pantalla, o cerrarla. */
+  | { type: "booking"; locator?: string }
 
 export function initialQueueDesk(): QueueDesk {
   return { journey: initialQueueJourney(), recent: [] }
@@ -226,6 +230,10 @@ export function queueDeskReducer(
         },
       }
     }
+    case "booking":
+      return state.booking === action.locator
+        ? state
+        : { ...state, booking: action.locator }
     case "sessionGone": {
       const journey = queueJourneyReducer(state.journey, {
         type: "sessionGone",

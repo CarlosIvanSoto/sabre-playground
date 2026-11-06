@@ -84,8 +84,8 @@ bandera, producción no aparece aunque haya credenciales.
 | `/` | Los siete flujos. |
 | `/auth` | 1. Autenticación: token v3 o v2, vencimiento, refresco y un 401 forzado. |
 | `/air-booking` | 2. Air Booking de punta a punta: BFM, revalidar, asientos, reservar, leer y cancelar. |
-| `/seats` | 3. Asientos de un PNR. |
-| `/booking` | 4. Reserva suelta: leer o cancelar por localizador. |
+| `/seats` | 3. Asientos de un PNR. `?pnrLocator=` prellena el localizador. |
+| `/booking` | 4. Reserva suelta: leer o cancelar por localizador. `?confirmationId=` prellena la lectura. |
 | `/session` | 5. Sesión SOAP: abrir, ping y cerrar, con el contador de inactividad. |
 | `/queues`, `/queues/<PCC>/<cola>` | 6. Colas: `count`, `list`, `access`, `ignore`, `remove`, `place`, `exit` y `process`. |
 | `/queue-paragraph` | 7. Párrafo de cola: el parser, sin red. |

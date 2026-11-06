@@ -38,21 +38,33 @@ import {
  * Flujo 4: leer o cancelar una reserva por su localizador. Cancel pide confirmación y no
  * aparece con un entorno de solo lectura (producción).
  */
-export function BookingFlow() {
+export function BookingFlow({
+  initialConfirmationId,
+}: {
+  /** De `?confirmationId=`: prellena `booking.get`. */
+  initialConfirmationId?: string
+}) {
   const { environment } = useEnvironment()
   return (
     <>
-      <BookingGetStep />
+      <BookingGetStep initialConfirmationId={initialConfirmationId} />
       {!environment.readOnly && <BookingCancelStep />}
     </>
   )
 }
 
-function BookingGetStep() {
+function BookingGetStep({
+  initialConfirmationId,
+}: {
+  initialConfirmationId?: string
+}) {
   const { run, pending, execute } = useStep("booking.get", getBooking)
   const form = useForm<BookingGetInput>({
     resolver: zodResolver(bookingGetSchema),
-    defaultValues: { confirmationId: MISSING_LOCATOR, surname: "" },
+    defaultValues: {
+      confirmationId: initialConfirmationId ?? MISSING_LOCATOR,
+      surname: "",
+    },
   })
   const errors = form.formState.errors
 
