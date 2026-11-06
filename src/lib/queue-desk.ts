@@ -30,6 +30,11 @@ export interface DeskQueue {
 
 export interface DeskCount {
   queues: DeskQueue[]
+  /**
+   * Colas ajustadas en el navegador después de un `place` o un `remove` (−1 / +1), hasta el
+   * siguiente ⟳. No se corre `count` después de cada escritura (ADR-025).
+   */
+  estimated: string[]
   totals: QueueCountResponse["totals"]
   /** `QueueInfo@DateTime` tal cual, sin año. */
   countedAt?: string
@@ -41,7 +46,18 @@ export interface DeskScreen {
   run: StepRun
   /** Sube con cada paso: la vista del centro se vuelve a montar con él. */
   seq: number
+  /** Qué hizo la escritura que trajo este PNR: "AAAAAA se movió a la 60 (PIC 11)". */
+  note?: string
 }
+
+/** Un destino de `place`: cola y PIC, como texto. */
+export interface DeskDestination {
+  queue: string
+  instructionCode: string
+}
+
+/** Cuántos destinos recientes se ofrecen como chips. */
+export const RECENT_DESTINATIONS = 3
 
 export interface QueueDesk {
   journey: QueueJourney
@@ -51,6 +67,8 @@ export interface QueueDesk {
   /** El conteo de la cola elegida al hacer clic, antes del `access`: la `N` de `n de N`. */
   total?: number
   screen?: DeskScreen
+  /** Las últimas combinaciones de cola y PIC de `place`, la más nueva primero. */
+  recent: DeskDestination[]
 }
 
 export type QueueDeskAction =
@@ -59,12 +77,19 @@ export type QueueDeskAction =
   /** Clic en una cola del conteo, antes del `access`. */
   | { type: "select"; queue: string }
   /** Respuesta de un paso que mueve el cursor (`access`, `ignore`, `exit`…). */
-  | { type: "moved"; panel: QueuePanel; method: string; run: StepRun }
+  | {
+      type: "moved"
+      panel: QueuePanel
+      method: string
+      run: StepRun
+      /** Solo `place`: el destino. */
+      to?: DeskDestination
+    }
   /** La sesión se cerró, venció o cambió el entorno: no hay cursor. */
   | { type: "sessionGone" }
 
 export function initialQueueDesk(): QueueDesk {
-  return { journey: initialQueueJourney() }
+  return { journey: initialQueueJourney(), recent: [] }
 }
 
 /** El motivo de un paso que no corrió o que falló. */
@@ -90,8 +115,65 @@ function countOf(run: StepRun): DeskCount | undefined {
       named: typeof queue !== "number",
     })),
     totals: response.totals ?? {},
+    estimated: [],
     countedAt: response.countedAt,
   }
+}
+
+/**
+ * Un `place` o un `remove` que salió bien dentro de una cola: de qué cola salió el PNR y qué
+ * se dice en el centro. `undefined` si el paso no fue una escritura o falló.
+ */
+function writeOf(
+  state: QueueDesk,
+  action: Extract<QueueDeskAction, { type: "moved" }>
+): { from: string; note: string } | undefined {
+  if (action.panel !== "place" && action.panel !== "remove") return undefined
+  if (!action.run.enabled || !action.run.step.ok) return undefined
+  const locator = state.journey.current
+  const from = state.journey.queue
+  if (locator === undefined || from === "") return undefined
+  if (action.panel === "remove") {
+    return { from, note: `${locator} salió de la cola ${from}.` }
+  }
+  if (action.to === undefined) return undefined
+  return {
+    from,
+    note: `${locator} se movió de la ${from} a la ${action.to.queue} (PIC ${action.to.instructionCode}).`,
+  }
+}
+
+/** −1 en la cola de origen y +1 en la de destino, si está en la lista. Quedan como estimadas. */
+function adjust(
+  count: DeskCount | undefined,
+  from: string,
+  to?: string
+): DeskCount | undefined {
+  if (count === undefined) return undefined
+  const touched = new Set(count.estimated)
+  const queues = count.queues.map((row) => {
+    if (row.queue === from) {
+      touched.add(row.queue)
+      return { ...row, count: Math.max(0, row.count - 1) }
+    }
+    if (to !== undefined && row.queue === to) {
+      touched.add(row.queue)
+      return { ...row, count: row.count + 1 }
+    }
+    return row
+  })
+  return { ...count, queues, estimated: [...touched] }
+}
+
+function remember(
+  recent: DeskDestination[],
+  to: DeskDestination
+): DeskDestination[] {
+  const others = recent.filter(
+    (item) =>
+      item.queue !== to.queue || item.instructionCode !== to.instructionCode
+  )
+  return [to, ...others].slice(0, RECENT_DESTINATIONS)
 }
 
 export function queueDeskReducer(
@@ -124,13 +206,23 @@ export function queueDeskReducer(
         panel: action.panel,
         run: action.run,
       })
+      const write = writeOf(state, action)
       return {
         ...state,
         journey,
+        count:
+          write === undefined
+            ? state.count
+            : adjust(state.count, write.from, action.to?.queue),
+        recent:
+          write !== undefined && action.to !== undefined
+            ? remember(state.recent, action.to)
+            : state.recent,
         screen: {
           method: action.method,
           run: action.run,
           seq: (state.screen?.seq ?? 0) + 1,
+          note: write?.note,
         },
       }
     }

@@ -72,7 +72,17 @@ export function DeskQueues({
                 >
                   <span className="w-10 font-mono">{row.queue}</span>
                   {row.queue === active && <Badge>dentro</Badge>}
-                  <span className="ms-auto tabular-nums">{row.count}</span>
+                  <span className="ms-auto tabular-nums">
+                    {count.estimated.includes(row.queue) && (
+                      <span
+                        className="text-muted-foreground me-1 text-xs"
+                        title="Estimado: ajustado después de mover o sacar, hasta el siguiente ⟳"
+                      >
+                        estimado
+                      </span>
+                    )}
+                    {row.count}
+                  </span>
                 </button>
               )}
             </li>

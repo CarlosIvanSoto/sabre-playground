@@ -2,23 +2,28 @@
 
 import { HistoryIcon, RotateCwIcon } from "lucide-react"
 import Link from "next/link"
-import { type ReactNode, useEffect, useReducer } from "react"
+import { type ReactNode, useEffect, useReducer, useState } from "react"
 import {
   queueAccess,
   queueCount,
   queueExit,
   queueIgnore,
+  queuePlace,
+  queueRemove,
 } from "@/app/(console)/queues/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useHistory } from "@/components/history/history-provider"
 import { DeskQueues } from "@/components/queue-desk/desk-queues"
 import { DeskScreenView } from "@/components/queue-desk/desk-screen"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
+import { MoveControl, RemoveControl } from "@/components/queue-desk/desk-write"
+import { UnlockCard } from "@/components/queues/queues-flow"
 import { useSessionStatus } from "@/components/session/use-session-status"
 import { useStep } from "@/components/step/use-step"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  type DeskDestination,
   initialQueueDesk,
   type QueueDesk as QueueDeskState,
   queueDeskReducer,
@@ -38,8 +43,8 @@ import type { StepRun } from "@/lib/step/types"
  * cada llamada pasa por `useStep` y queda en el historial.
  *
  * Al cambiar de entorno, la mesa se vuelve a montar: el conteo y el cursor de un entorno no
- * valen en otro. Mover y sacar llegan en F9.3, la hoja de reserva en F9.4, y los atajos y la
- * barra de actividad en F9.5.
+ * valen en otro. La hoja de reserva llega en F9.4, y los atajos y la barra de actividad en
+ * F9.5.
  */
 export function QueueDesk() {
   const { environment } = useEnvironment()
@@ -47,7 +52,11 @@ export function QueueDesk() {
 }
 
 function Desk() {
+  const { environment } = useEnvironment()
   const { status, error, refresh } = useSessionStatus()
+  // Producción: el desbloqueo de `remove` y `place`, como en el flujo 6. Se pierde al recargar
+  // o al cambiar de entorno (la mesa se vuelve a montar).
+  const [unlocked, setUnlocked] = useState(false)
   const [desk, dispatch] = useReducer(queueDeskReducer, undefined, () =>
     initialQueueDesk()
   )
@@ -61,7 +70,14 @@ function Desk() {
   const accessStep = useStep("queue.access", queueAccess)
   const ignoreStep = useStep("queue.ignore", queueIgnore)
   const exitStep = useStep("queue.exit", queueExit)
-  const moving = accessStep.pending || ignoreStep.pending || exitStep.pending
+  const placeStep = useStep("queue.place", queuePlace)
+  const removeStep = useStep("queue.remove", queueRemove)
+  const moving =
+    accessStep.pending ||
+    ignoreStep.pending ||
+    exitStep.pending ||
+    placeStep.pending ||
+    removeStep.pending
 
   // Una sesión cerrada o vencida no tiene cursor.
   useEffect(() => {
@@ -84,10 +100,12 @@ function Desk() {
   }, [open])
 
   /** Después de un paso que mueve el cursor: al reducer y a pedir el estado de la sesión. */
-  const moved = (panel: QueuePanel, method: string) => (run: StepRun) => {
-    dispatch({ type: "moved", panel, method, run })
-    void refresh()
-  }
+  const moved =
+    (panel: QueuePanel, method: string, to?: DeskDestination) =>
+    (run: StepRun) => {
+      dispatch({ type: "moved", panel, method, run, to })
+      void refresh()
+    }
 
   const count = () =>
     countStep.execute({ pcc: "" }, (run) => {
@@ -113,6 +131,15 @@ function Desk() {
   const inside = place === "inside"
   const enterReason =
     place === "closed" ? disabledReason(place, "access") : undefined
+  /** Mover y sacar: solo con un PNR en pantalla y, en producción, desbloqueados. */
+  const writeReason = !inside
+    ? reason("remove")
+    : desk.journey.current === undefined
+      ? "Sin PNR en pantalla."
+      : environment.readOnly && !unlocked
+        ? "En producción, primero el desbloqueo de abajo."
+        : undefined
+  const unlock = environment.readOnly && unlocked
 
   return (
     // El layout de la consola deja la cabecera de 3.5rem y un padding de 1rem (1.5rem desde
@@ -157,7 +184,7 @@ function Desk() {
         <DeskColumn title={<ScreenTitle desk={desk} inside={inside} />}>
           <DeskScreenView key={desk.screen?.seq ?? 0} screen={desk.screen} />
         </DeskColumn>
-        <DeskColumn title="Acciones">
+        <DeskColumn title="Acciones" scroll>
           <div className="flex flex-col gap-2 text-sm">
             <ActionButton
               label="Siguiente"
@@ -176,8 +203,44 @@ function Desk() {
               pending={moving}
               onClick={() => exitStep.execute({}, moved("exit", "queue.exit"))}
             />
+            <div className="mt-1 flex flex-col gap-2 border-t pt-3">
+              <MoveControl
+                locator={desk.journey.current}
+                from={desk.journey.queue}
+                reason={writeReason}
+                pending={moving}
+                recent={desk.recent}
+                onConfirm={(to) =>
+                  placeStep.execute(
+                    {
+                      queue: to.queue,
+                      pcc: "",
+                      instructionCode: to.instructionCode,
+                      locators: "",
+                      unlock,
+                    },
+                    moved("place", "queue.place", to)
+                  )
+                }
+              />
+              <RemoveControl
+                locator={desk.journey.current}
+                from={desk.journey.queue}
+                reason={writeReason}
+                pending={moving}
+                onConfirm={() =>
+                  removeStep.execute(
+                    { from: "", unlock },
+                    moved("remove", "queue.remove")
+                  )
+                }
+              />
+            </div>
+            {environment.readOnly && (
+              <UnlockCard unlocked={unlocked} onChange={setUnlocked} />
+            )}
             <p className="text-muted-foreground mt-2 border-t pt-3 text-xs">
-              Mover y sacar llegan en F9.3, y la reserva en F9.4.
+              La reserva llega en F9.4.
             </p>
           </div>
         </DeskColumn>
