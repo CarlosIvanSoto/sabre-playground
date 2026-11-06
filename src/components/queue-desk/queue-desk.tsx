@@ -3,6 +3,7 @@
 import { ExternalLink, RotateCwIcon } from "lucide-react"
 import Link from "next/link"
 import { type ReactNode, useEffect, useReducer, useState } from "react"
+import type { QueueItem } from "sabre-client"
 import { getBooking } from "@/app/(console)/booking/actions"
 import {
   queueAccess,
@@ -15,6 +16,7 @@ import {
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { BookingSheet } from "@/components/queue-desk/desk-booking"
+import { DeskCensus } from "@/components/queue-desk/desk-census"
 import { DeskPcc, DeskQueues } from "@/components/queue-desk/desk-queues"
 import { DeskScreenView } from "@/components/queue-desk/desk-screen"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
@@ -392,6 +394,15 @@ function Desk({ initialPcc }: { initialPcc: string }) {
                 </Button>
               )}
             </div>
+            <div className="mt-1 flex flex-col gap-2 border-t pt-3">
+              <DeskCensus
+                item={screenItem(desk)}
+                queue={desk.journey.queue}
+                total={desk.total}
+                pcc={desk.pcc}
+                reason={inside ? undefined : "Solo dentro de una cola."}
+              />
+            </div>
           </div>
         </DeskColumn>
       </div>
@@ -414,6 +425,17 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       />
     </div>
   )
+}
+
+/** El `QueueItem` en pantalla, si el último paso trajo el PNR del cursor. */
+function screenItem(desk: QueueDeskState): QueueItem | undefined {
+  const run = desk.screen?.run
+  if (run === undefined || !run.enabled || !run.step.ok) return undefined
+  const result = run.step.result as
+    | { done?: boolean; item?: QueueItem }
+    | undefined
+  if (result?.done !== false || result.item === undefined) return undefined
+  return result.item.locator === desk.journey.current ? result.item : undefined
 }
 
 /** `Cola 9 · PNR 3 de 6 · AAAAAA`, con lo que haya. */
