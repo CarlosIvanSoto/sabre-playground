@@ -6,7 +6,7 @@ import {
 import type { BookingTraits } from "./census-traits.ts"
 
 /**
- * Un censo `queue-census/1` sintético para los tests (F10.3 y F10.4). Los localizadores son de
+ * Un censo `queue-census/2` sintético para los tests (F10.3 y F10.4). Los localizadores son de
  * prueba (`TESTAA`…) y el PCC es inventado (`Z9Z9`): ningún dato real.
  */
 
@@ -45,7 +45,7 @@ export function booking(): BookingTraits {
         international: null,
         status: "HK",
         statusName: "Confirmed",
-        scheduleChangeMinutes: null,
+        departureDelayMinutes: null,
         daysToDeparture: 12,
         isPast: false,
         bookingClass: "Y",

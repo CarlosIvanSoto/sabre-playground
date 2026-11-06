@@ -23,7 +23,7 @@ export const DEFAULT_PER_QUEUE = 10
 export const MAX_PER_QUEUE = 25
 
 /**
- * Cómo terminó una cola, con los nombres de `queue-census/1`:
+ * Cómo terminó una cola, con los nombres de `queue-census/2`:
  * - `end-of-display`: se leyó hasta el fin de cola.
  * - `empty`: la cola estaba en el conteo, pero `access` la encontró vacía.
  * - `limit`: se llegó a N, o se paró el censo. En los dos casos se sale con `exit`.
@@ -152,7 +152,7 @@ export interface QueueCensus {
   /** El PCC de trabajo con el que se toma; vacío es el de la sesión. */
   pcc: string
   perQueue: number
-  /** `takenAt` de `queue-census/1`: el reloj del servidor al arrancar, en UTC. */
+  /** `takenAt` de `queue-census/2`: el reloj del servidor al arrancar, en UTC. */
   takenAt?: string
   /** ISO 8601, al arrancar y al terminar. */
   startedAt?: string

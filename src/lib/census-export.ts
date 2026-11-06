@@ -4,7 +4,7 @@ import type { QueueCensus } from "./queue-census.ts"
 
 /**
  * La exportación del censo (F10.3, #97; ADR-026, "Forma del censo" y "Validación que falla
- * cerrada"): el formato `queue-census/1` y su validador.
+ * cerrada"): el formato `queue-census/2` y su validador.
  *
  * El validador recorre el JSON entero contra un esquema cerrado: cada objeto con sus claves
  * exactas, cada valor con su tipo y su expresión. Además:
@@ -19,7 +19,12 @@ import type { QueueCensus } from "./queue-census.ts"
  * con `node --test`, sin bundler.
  */
 
-export const CENSUS_SCHEMA = "queue-census/1"
+/**
+ * `/2` (F10.7, #107): `departureDelayMinutes` en lugar de `departureDelayMinutes`, y
+ * `queuePlaceRemarks[]` con `pcc`, `date`, `queue` y `pic`. La consola solo exporta `/2`; el
+ * ingest del wiki lee los dos.
+ */
+export const CENSUS_SCHEMA = "queue-census/2"
 
 /** De dónde sale `takenAt`: el reloj del servidor de la consola, en UTC (ADR-026). */
 export const TAKEN_AT_SOURCE = "console-server-clock-utc"
@@ -110,7 +115,7 @@ export function isSafeLine(line: string): boolean {
 }
 
 /**
- * El censo en memoria como `queue-census/1`. Toma solo los rasgos, campo por campo: lo que no está
+ * El censo en memoria como `queue-census/2`. Toma solo los rasgos, campo por campo: lo que no está
  * acá no sale, aunque el estado lo tenga. `undefined` si todavía no hay nada que exportar.
  */
 export function buildCensusExport(
@@ -304,7 +309,7 @@ const BOOKING: Rule = {
         international: boolOrNull,
         status: textOrNull(P.status),
         statusName: textOrNull(P.enumName),
-        scheduleChangeMinutes: intOrNull(),
+        departureDelayMinutes: intOrNull(),
         daysToDeparture: intOrNull(),
         isPast: boolOrNull,
         bookingClass: textOrNull(P.bookingClass),
@@ -391,7 +396,14 @@ const BOOKING: Rule = {
     queuePlaceRemarks: {
       kind: "array",
       nullable: true,
-      of: object({ queue: int(0, 511), pic: PIC_CODE }),
+      of: object({
+        pcc: { kind: "literal", values: ["working", "HDQ", "other"] },
+        date: text(
+          /^(0[1-9]|[12]\d|3[01])(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)$/
+        ),
+        queue: int(0, 511),
+        pic: PIC_CODE,
+      }),
       max: 100,
     },
     queuePlaceCount: int(0),
@@ -484,7 +496,7 @@ function describe(value: unknown): string {
   return typeof value === "string" ? `"${value.slice(0, 40)}"` : typeof value
 }
 
-/** Valida `doc` contra `queue-census/1`. Una lista vacía quiere decir que se puede exportar. */
+/** Valida `doc` contra `queue-census/2`. Una lista vacía quiere decir que se puede exportar. */
 export function validateCensusExport(
   doc: unknown,
   context: ValidationContext

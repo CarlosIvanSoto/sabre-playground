@@ -10,7 +10,7 @@ import {
 import { census, context, PCC } from "./census-fixture.ts"
 
 /**
- * El validador de `queue-census/1` (F10.3, #97): una prueba por regla, con datos sintéticos.
+ * El validador de `queue-census/2` (F10.3, #97): una prueba por regla, con datos sintéticos.
  * Los localizadores son de prueba (`TESTAA`…) y el PCC es inventado (`Z9Z9`).
  */
 
@@ -135,6 +135,42 @@ describe("validateCensusExport", () => {
     assert.deepEqual(paths(doc), [])
   })
 
+  it("acepta remarks QUEUE_PLACE con PCC como enum", () => {
+    const doc = mutate((doc) => {
+      doc.queues[0].items[0].booking.queuePlaceRemarks = [
+        { pcc: "working", date: "25SEP", queue: 146, pic: 15 },
+        { pcc: "HDQ", date: "05JUL", queue: 313, pic: 36 },
+      ]
+      doc.queues[0].items[0].booking.queuePlaceCount = 2
+    })
+    assert.deepEqual(paths(doc), [])
+  })
+
+  it("rechaza el PCC real o una fecha inválida en un remark QUEUE_PLACE", () => {
+    const doc = mutate((doc) => {
+      doc.queues[0].items[0].booking.queuePlaceRemarks = [
+        { pcc: PCC, date: "25SEP", queue: 146, pic: 15 },
+        { pcc: "other", date: "32SEP", queue: 146, pic: 15 },
+      ]
+    })
+    assert.deepEqual(paths(doc).sort(), [
+      "queues[0].items[0].booking.queuePlaceRemarks[0].pcc",
+      "queues[0].items[0].booking.queuePlaceRemarks[1].date",
+    ])
+  })
+
+  it("rechaza el nombre de /1 para la demora", () => {
+    const doc = mutate((doc) => {
+      const flight = doc.queues[0].items[0].booking.flights[0]
+      flight.scheduleChangeMinutes = flight.departureDelayMinutes
+      delete flight.departureDelayMinutes
+    })
+    assert.deepEqual(paths(doc).sort(), [
+      "queues[0].items[0].booking.flights[0].departureDelayMinutes",
+      "queues[0].items[0].booking.flights[0].scheduleChangeMinutes",
+    ])
+  })
+
   it("rechaza un pnr que no leyó la consola", () => {
     const doc = mutate((doc) => {
       doc.queues[0].items[1].pnr = "ZZZZZZ"
@@ -179,7 +215,7 @@ describe("validateCensusExport", () => {
 
   it("rechaza un esquema o una fuente de takenAt distintos", () => {
     const doc = mutate((doc) => {
-      doc.schema = "queue-census/2"
+      doc.schema = "queue-census/1"
       doc.takenAtSource = "browser"
     })
     assert.deepEqual(paths(doc).sort(), ["schema", "takenAtSource"])
