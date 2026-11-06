@@ -4,6 +4,7 @@ import {
   FlaskConicalIcon,
   HistoryIcon,
   InboxIcon,
+  ScanSearchIcon,
   TerminalIcon,
 } from "lucide-react"
 import Link from "next/link"
@@ -107,6 +108,16 @@ export function AppSidebar() {
                 >
                   <InboxIcon />
                   <span>Mesa de colas</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Censo de colas"
+                  isActive={pathname.startsWith("/queue-census")}
+                  render={<Link href="/queue-census" />}
+                >
+                  <ScanSearchIcon />
+                  <span>Censo de colas</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

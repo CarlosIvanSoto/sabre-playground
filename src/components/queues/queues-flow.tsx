@@ -301,34 +301,48 @@ function Blocked({ reason, locked }: { reason?: string; locked?: boolean }) {
   return null
 }
 
-/** Producción: `remove` y `place` necesitan este desbloqueo explícito. */
+/**
+ * Producción: `remove` y `place` necesitan este desbloqueo explícito. El censo de colas
+ * (`/queue-census`) usa el mismo, con su propio texto, aunque solo lea (ADR-026).
+ */
 export function UnlockCard({
   unlocked,
   onChange,
+  id = "queues-unlock",
+  title = "Escrituras en producción",
+  label = "Desbloquear remove y place en esta página",
+  children,
 }: {
   unlocked: boolean
   onChange: (value: boolean) => void
+  id?: string
+  title?: string
+  label?: string
+  /** El texto del aviso. Por defecto, el de las escrituras del flujo 6. */
+  children?: ReactNode
 }) {
   return (
     <Alert variant={unlocked ? "destructive" : "default"}>
       <LockOpen />
-      <AlertTitle>Escrituras en producción</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription className="flex flex-col gap-3">
         <span>
-          Las colas de producción tienen PNR reales. <code>remove</code> y{" "}
-          <code>place</code> se prueban solo con un PNR designado y una cola
-          vacía (plan-tier-3), y aun desbloqueados piden confirmación en cada
-          corrida. El desbloqueo se pierde al recargar.
+          {children ?? (
+            <>
+              Las colas de producción tienen PNR reales. <code>remove</code> y{" "}
+              <code>place</code> se prueban solo con un PNR designado y una cola
+              vacía (plan-tier-3), y aun desbloqueados piden confirmación en
+              cada corrida. El desbloqueo se pierde al recargar.
+            </>
+          )}
         </span>
         <Field orientation="horizontal">
           <Checkbox
-            id="queues-unlock"
+            id={id}
             checked={unlocked}
             onCheckedChange={(checked) => onChange(checked === true)}
           />
-          <FieldLabel htmlFor="queues-unlock">
-            Desbloquear remove y place en esta página
-          </FieldLabel>
+          <FieldLabel htmlFor={id}>{label}</FieldLabel>
         </Field>
       </AlertDescription>
     </Alert>
