@@ -4,8 +4,9 @@ import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { DeskCount } from "@/lib/queue-desk"
-import { parseQueueRef } from "@/lib/queues"
+import { Label } from "@/components/ui/label"
+import { type DeskCount, workingPcc } from "@/lib/queue-desk"
+import { PCC_PATTERN, parseQueueRef } from "@/lib/queues"
 import { cn } from "@/lib/utils"
 
 /**
@@ -151,6 +152,70 @@ function OtherQueue({
       >
         Entrar
       </Button>
+    </form>
+  )
+}
+
+/**
+ * El PCC de trabajo de la mesa (F9.6): con qué PCC se cuenta y se entra. La sesión no cambia;
+ * el PCC va en cada operación. Vacío vuelve al de la sesión.
+ */
+export function DeskPcc({
+  pcc,
+  sessionPcc,
+  disabled,
+  onChange,
+}: {
+  /** El PCC de trabajo; vacío es el de la sesión. */
+  pcc: string
+  sessionPcc: string
+  disabled: boolean
+  onChange: (pcc: string) => void
+}) {
+  const [text, setText] = useState(pcc)
+  const typed = text.trim().toUpperCase()
+  const invalid = typed !== "" && !PCC_PATTERN.test(typed)
+  const next = workingPcc(typed, sessionPcc)
+  return (
+    <form
+      className="flex flex-col gap-1"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!invalid) onChange(next)
+      }}
+    >
+      <Label htmlFor="desk-pcc" className="text-xs">
+        PCC de trabajo
+      </Label>
+      <div className="flex items-center gap-2">
+        <Input
+          id="desk-pcc"
+          className="h-8 font-mono uppercase"
+          maxLength={4}
+          placeholder={sessionPcc || "sesión"}
+          aria-invalid={invalid}
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+        />
+        <Button
+          type="submit"
+          size="sm"
+          variant="outline"
+          disabled={disabled || invalid || next === pcc}
+          title={
+            invalid
+              ? "3 o 4 letras o dígitos"
+              : "Cambia el PCC: sale de la cola si está dentro y vuelve a contar"
+          }
+        >
+          Cambiar
+        </Button>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {pcc === ""
+          ? "El de la sesión."
+          : `Otro PCC que el de la sesión${sessionPcc ? ` (${sessionPcc})` : ""}.`}
+      </p>
     </form>
   )
 }

@@ -13,6 +13,7 @@ import { inEnvironment } from "@/server/sabre/step-action"
  * - `booking.get` es una lectura: el SDK reintenta 5xx y 429. Sin reserva lanza
  *   `SabreBusinessError` (`BOOKING_NOT_FOUND`); con reserva, los avisos y los errores parciales
  *   van en `warnings` y `errors` del resultado.
+ * - Los dos aceptan `targetPcc` (cambio de contexto); sin él, el PCC de auth.
  * - `booking.cancel` es una escritura sin reintento, siempre con `cancelAll: true`. El SDK trata
  *   `NO_ITEMS_CANCELLED` como fallo. En producción no corre (solo lectura): la UI no lo ofrece y
  *   esta action lo rechaza igual.
@@ -29,11 +30,14 @@ export async function getBooking(
     if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
     const sabre = getSabre(id)
     if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
-    const { confirmationId, surname } = parsed.data
+    const { confirmationId, surname, targetPcc } = parsed.data
     return {
       enabled: true,
       step: await runStep((options) =>
-        sabre.client.booking.get({ confirmationId, surname }, options)
+        sabre.client.booking.get(
+          { confirmationId, surname, targetPcc },
+          options
+        )
       ),
     }
   })
@@ -54,12 +58,12 @@ export async function cancelBooking(
     if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
     const sabre = getSabre(id)
     if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
-    const { confirmationId, retrieveBooking } = parsed.data
+    const { confirmationId, retrieveBooking, targetPcc } = parsed.data
     return {
       enabled: true,
       step: await runStep((options) =>
         sabre.client.booking.cancel(
-          { confirmationId, cancelAll: true, retrieveBooking },
+          { confirmationId, cancelAll: true, retrieveBooking, targetPcc },
           options
         )
       ),

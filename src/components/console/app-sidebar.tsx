@@ -102,7 +102,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Mesa de colas"
-                  isActive={pathname === "/queue-desk"}
+                  isActive={pathname.startsWith("/queue-desk")}
                   render={<Link href="/queue-desk" />}
                 >
                   <InboxIcon />

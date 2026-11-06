@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { optionalPcc } from "@/lib/queues"
 
 /**
  * Entradas del flujo 4 (reserva suelta) y del paso de prueba de `runStep`. Las usan el
@@ -21,7 +22,17 @@ const surname = z
   .optional()
   .transform((value) => (value === "" ? undefined : value))
 
-export const bookingGetSchema = z.object({ confirmationId, surname })
+/**
+ * `targetPcc` opcional: el PCC en el que se lee o se cancela, si no es el de auth. Vacío es el
+ * de auth. Lo usa la mesa de colas con su PCC de trabajo (F9.6, ADR-025).
+ */
+const targetPcc = optionalPcc.optional()
+
+export const bookingGetSchema = z.object({
+  confirmationId,
+  surname,
+  targetPcc,
+})
 
 export type BookingGetInput = z.input<typeof bookingGetSchema>
 
@@ -31,6 +42,7 @@ export type BookingGetInput = z.input<typeof bookingGetSchema>
  */
 export const bookingCancelSchema = z.object({
   confirmationId,
+  targetPcc,
   retrieveBooking: z.boolean().default(false),
 })
 
