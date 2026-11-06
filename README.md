@@ -89,6 +89,7 @@ bandera, producción no aparece aunque haya credenciales.
 | `/session` | 5. Sesión SOAP: abrir, ping y cerrar, con el contador de inactividad. |
 | `/queues`, `/queues/<PCC>/<cola>` | 6. Colas: `count`, `list`, `access`, `ignore`, `remove`, `place`, `exit` y `process`. |
 | `/queue-paragraph` | 7. Párrafo de cola: el parser, sin red. |
+| `/queue-desk` | Mesa de colas (ADR-025): sesión, conteo, navegación y reserva en una sola pantalla, sin scroll. Compone los flujos 4, 5 y 6; se arma en la Fase 9. |
 | `/history` | Las llamadas de la sesión del navegador. |
 | `/dev/run-step` | Prueba de `runStep` (desarrollo). |
 

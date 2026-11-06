@@ -1,6 +1,11 @@
 "use client"
 
-import { FlaskConicalIcon, HistoryIcon, TerminalIcon } from "lucide-react"
+import {
+  FlaskConicalIcon,
+  HistoryIcon,
+  InboxIcon,
+  TerminalIcon,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEnvironment } from "@/components/environment/environment-provider"
@@ -87,6 +92,23 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 )
               })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Mesas</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Mesa de colas"
+                  isActive={pathname === "/queue-desk"}
+                  render={<Link href="/queue-desk" />}
+                >
+                  <InboxIcon />
+                  <span>Mesa de colas</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
