@@ -46,6 +46,8 @@ export const DESK_SHORTCUTS: [string, string][] = [
  * cuatro pestañas de ADR-022 y "Copiar como hallazgo": la mesa no esconde lo que la consola
  * existe para mostrar. Todo sale del historial del navegador (`useStep` ya graba cada
  * llamada).
+ *
+ * El censo de colas (`/queue-census`) la usa igual, sin la leyenda de atajos.
  */
 export function ActivityBar({
   since,
@@ -54,8 +56,9 @@ export function ActivityBar({
 }: {
   /** ISO 8601: desde cuándo son de la mesa las llamadas del historial. */
   since: string
-  legendOpen: boolean
-  onLegendOpenChange: (open: boolean) => void
+  /** Sin estos dos, no hay leyenda de atajos. */
+  legendOpen?: boolean
+  onLegendOpenChange?: (open: boolean) => void
 }) {
   const { entries } = useHistory()
   const [selectedId, setSelectedId] = useState<string>()
@@ -70,7 +73,7 @@ export function ActivityBar({
         Actividad
       </span>
       <ol
-        aria-label="Últimas llamadas de la mesa"
+        aria-label="Últimas llamadas"
         // `contain: inline-size`: el ancho de las llamadas no empuja el de la mesa; lo que no
         // cabe se corta.
         className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden [contain:inline-size]"
@@ -88,7 +91,9 @@ export function ActivityBar({
           </li>
         ))}
       </ol>
-      <Legend open={legendOpen} onOpenChange={onLegendOpenChange} />
+      {legendOpen !== undefined && onLegendOpenChange !== undefined && (
+        <Legend open={legendOpen} onOpenChange={onLegendOpenChange} />
+      )}
       <Link
         href="/history"
         className="text-muted-foreground hover:text-foreground inline-flex shrink-0 items-center gap-1"
