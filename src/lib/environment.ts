@@ -1,5 +1,5 @@
 /**
- * Los entornos que se eligen en la consola. CERT y producción vienen de `.env.local`; fake
+ * Los entornos que se eligen en la consola. CERT y producción vienen de `.env`; fake
  * corre sin red ni credenciales, con `createQueueFake` de `sabre-client/testing`.
  *
  * Este módulo lo usan el cliente y el servidor: no lleva credenciales ni valores.
