@@ -87,13 +87,12 @@ export interface FlightTraits {
   /** `flightStatusName`, el enum del spec. */
   statusName: string | null
   /**
-   * Minutos entre `updatedDeparture*` y la salida original; `null` si no hay. Según el spec v1.33,
-   * `updatedDeparture*` es la salida **estimada o real** (demoras cerca de la salida), no un
-   * cambio de horario del itinerario: ese se ve en `status` (`UN`, `TK`, `SC`, `WK`). En el
-   * primer censo de producción vino `null` en los 393 vuelos (Q-091). El nombre queda por
-   * `queue-census/1`.
+   * Minutos entre `updatedDeparture*` y la salida programada; `null` si no hay. Según el spec
+   * v1.33, `updatedDeparture*` es la salida **estimada o real**: mide una demora, no un cambio de
+   * horario del itinerario, que se ve en `status` (`UN`, `TK`, `SC`, `WK`). En `queue-census/1` se
+   * llamaba `scheduleChangeMinutes` (Q-091).
    */
-  scheduleChangeMinutes: number | null
+  departureDelayMinutes: number | null
   daysToDeparture: number | null
   isPast: boolean | null
   bookingClass: string | null
@@ -164,7 +163,12 @@ export interface FutureTicketingTraits {
   sameAsWorkingPcc: boolean | null
 }
 
+/** Una colocación programada (remark `QUEUE_PLACE`, Q-090). El PCC no sale del servidor. */
 export interface QueuePlaceRemark {
+  /** `working` si es el PCC de trabajo, `HDQ` (central de Sabre) u `other`. */
+  pcc: "working" | "HDQ" | "other"
+  /** `DDMMM`, sin año, tal cual en el remark. */
+  date: string
   queue: number
   pic: number
 }

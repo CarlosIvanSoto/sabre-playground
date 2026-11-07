@@ -7,6 +7,7 @@ import {
   resolveHostDate,
 } from "sabre-client"
 import { maskParagraph } from "@/lib/census-export"
+import { parseQueuePlaces } from "@/lib/census-queue-place"
 import {
   type AccountingTraits,
   type AncillaryTraits,
@@ -16,7 +17,6 @@ import {
   type FlightTraits,
   TRAIT_PATTERNS as P,
   type ParagraphTraits,
-  type QueuePlaceRemark,
   type SegmentCount,
   type TextFlags,
 } from "@/lib/census-traits"
@@ -251,34 +251,6 @@ function flagsOf(texts: string[]): TextFlags {
   }
 }
 
-// --- Remarks QUEUE_PLACE -----------------------------------------------------------------
-
-/**
- * Una colocación programada con una expresión cerrada: opcionalmente la fecha (`12FEB`) y el PCC,
- * y después `cola/PIC` (`7/11`). Sin una muestra de Get Booking todavía (CERT no devolvió
- * remarks `QUEUE_PLACE`, 2026-11-05), así que si algún remark no la cumple, se deja solo el
- * conteo.
- */
-const QUEUE_PLACE =
-  /^(?:\d{1,2}[A-Z]{3}(?:\d{2})?\s*\/?\s*)?(?:[A-Z0-9]{3,4}\s*\/\s*)?(\d{1,3})\s*\/\s*(\d{1,3})$/
-
-function queuePlacesOf(texts: string[]): QueuePlaceRemark[] | null {
-  const out: QueuePlaceRemark[] = []
-  for (const text of texts) {
-    const match = QUEUE_PLACE.exec(text.trim().toUpperCase())
-    if (match === null) return null
-    const queue = Number(match[1])
-    const pic = Number(match[2])
-    if (
-      queue > 511 ||
-      !((pic >= 0 && pic <= 191) || (pic >= 200 && pic <= 254))
-    )
-      return null
-    out.push({ queue, pic })
-  }
-  return out
-}
-
 // --- Reserva -----------------------------------------------------------------------------
 
 function flightTraits(flight: Json, now: Date): FlightTraits {
@@ -306,7 +278,7 @@ function flightTraits(flight: Json, now: Date): FlightTraits {
     international: null,
     status: code(flight.flightStatusCode, P.status),
     statusName: code(flight.flightStatusName, P.enumName),
-    scheduleChangeMinutes:
+    departureDelayMinutes:
       changed && original !== undefined && updated !== undefined
         ? Math.round((updated.getTime() - original.getTime()) / 60_000)
         : null,
@@ -582,7 +554,7 @@ export function bookingTraits(
       ),
     },
     remarks: remarkCounts,
-    queuePlaceRemarks: queuePlacesOf(queuePlaceTexts),
+    queuePlaceRemarks: parseQueuePlaces(queuePlaceTexts, workingPcc),
     queuePlaceCount: queuePlaceTexts.length,
     flags: flagsOf(freeTexts),
     pax: travelers.length,
