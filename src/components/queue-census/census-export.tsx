@@ -157,7 +157,11 @@ export function CensusExport({
               PNR
               {flagged > 0 &&
                 `, ${flagged} con el párrafo enmascarado en el anexo`}
-              {!doc.complete && ". Censo parado o cortado: complete es false"}.
+              {!doc.complete &&
+                (census.walked
+                  ? ". Censo parado o cortado: complete es false"
+                  : ". Censo armado desde la mesa: complete es false")}
+              .
             </AlertDescription>
           </Alert>
         ) : (
