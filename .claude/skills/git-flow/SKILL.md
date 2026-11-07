@@ -19,8 +19,11 @@ issue; siguen la vía corta de la sección 9.
   Nunca se usa como base ni recibe push durante la v2. Al cerrar #28, la base pasa a ser `main` y
   este skill se actualiza (sección 9).
 - **Repo:** `CarlosIvanSoto/sabre-playground` · **Milestone:** `v2`.
-- **Checks locales:** `pnpm lint && pnpm build` (`lint` es `biome check`; el build de Next también
-  hace el typecheck). La CI corre lo mismo (`pnpm biome ci` y `pnpm build`) en cada PR.
+- **Checks locales:** `pnpm lint && pnpm test && pnpm build` (`lint` es `biome check`; `test` corre
+  `node:test` sobre `src/**/*.test.ts`; el build de Next también hace el typecheck). La CI corre lo
+  mismo (`pnpm biome ci`, `pnpm test` y `pnpm build`) en cada PR, en el job "biome, tests y build".
+  Ese nombre es el check exigido por la protección de `v2`: si se renombra el job, hay que cambiar
+  también el check exigido (con confirmación del usuario), o todos los PR quedan `BLOCKED`.
 - **Prohibido en commits y PR:** líneas `Co-Authored-By`, `Claude-Session`, "Generated with Claude"
   o cualquier atribución a IA.
 
@@ -121,7 +124,7 @@ EOF
 ## 4. Verificar antes de subir
 
 ```bash
-pnpm lint && pnpm build
+pnpm lint && pnpm test && pnpm build
 ```
 
 Si `pnpm lint` marca formato u orden de imports, `pnpm biome check --write` lo arregla; revisar
@@ -131,7 +134,7 @@ Además, según la tarea:
 
 - **Flujos contra Sabre:** probar en CERT con `pnpm dev` y anotar qué se corrió (sin datos de
   pasajero).
-- **Modo fake:** probarlo sin `.env.local` cuando la tarea lo toque.
+- **Modo fake:** probarlo sin `.env` cuando la tarea lo toque.
 - **Token:** buscar el token en el HTML y en el payload de las server actions no debe dar
   resultados.
 
@@ -204,17 +207,34 @@ Antes del merge, esperar a que la CI termine en verde:
 gh pr checks <PR> --watch
 gh pr merge <PR> --squash --delete-branch
 git switch v2 && git pull --ff-only
-git branch -d <rama>               # si sigue existiendo en local
+git branch -D <rama>               # -D: Git no reconoce como mergeada una rama que entró por squash
 ```
 
 Si la base avanzó mientras el PR estaba abierto: `git fetch origin && git rebase origin/v2`,
 repetir checks y `git push --force-with-lease`.
 
-**PR apilados** (una rama sale de la de otra tarea y su PR apunta a esa rama): al hacer squash
-merge del PR de abajo, GitHub cambia la base del de arriba a `v2`, pero la rama de arriba sigue
-teniendo los commits originales del de abajo. Hay que sacarlos:
-`git rebase --onto origin/v2 <rama-de-abajo> <rama-de-arriba>`, con `--update-refs` si hay más
-ramas encima, repetir checks y `git push --force-with-lease` (con confirmación del usuario).
+**PR apilados** (una rama sale de la de otra tarea y su PR apunta a esa rama). Primero ver si
+GitHub los tiene en un stack nativo: `gh api repos/CarlosIvanSoto/sabre-playground/pulls/<PR> --jq .stack`.
+
+- **Stack nativo** (`stack` no es `null`): `gh pr merge` falla con "must be merged using the
+  asynchronous merge REST API". Mergear siempre el PR de `stack.position` 1, porque el merge
+  incluye todos los PR abiertos que tiene debajo:
+
+  ```bash
+  gh api -X PUT repos/CarlosIvanSoto/sabre-playground/pulls/<PR>/merge-async \
+    -f merge_method=squash -f merge_action=direct_merge \
+    -f sha=<head del PR> -f 'commit_title=<título del PR> (#<PR>)'
+  gh api repos/CarlosIvanSoto/sabre-playground/pulls/<PR>/merge-async/<uuid>   # hasta "merged"
+  ```
+
+  GitHub cambia la base del siguiente PR a `v2` y rebasa solo las ramas de arriba; el PR queda
+  `BLOCKED` hasta que termina la CI de ese push. Las ramas no se borran hasta mergear el último.
+- **Sin stack:** no usar `--delete-branch` en el PR de abajo, porque GitHub cierra el de arriba en
+  vez de cambiarle la base. Mergear, `gh pr edit <PR-de-arriba> --base v2`, y sacar los commits
+  originales del de abajo:
+  `git rebase --onto origin/v2 <rama-de-abajo> <rama-de-arriba>`, con `--update-refs` si hay más
+  ramas encima, repetir checks y `git push --force-with-lease` (con confirmación del usuario).
+  Recién entonces borrar la rama de abajo.
 
 Después del merge:
 

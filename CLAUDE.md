@@ -28,7 +28,7 @@ tipo `decisión`.
    consola, es un hallazgo sobre el SDK: se anota en el wiki, no se parcha acá.
 2. **Un mismo layout para todo**: formulario a la izquierda y pestañas Resultado / Crudo /
    Error / Log a la derecha, con componentes shadcn por defecto. Nada de diseño por pantalla.
-3. **Solo del lado del servidor.** Credenciales en `.env.local` (ignorado por git) y
+3. **Solo del lado del servidor.** Credenciales en `.env` (ignorado por git) y
    llamadas por server actions, en módulos `server-only`. El token nunca llega al HTML ni al
    payload del cliente.
 4. **CERT por defecto.** Producción, si se habilita, queda en solo lectura: Create y Cancel
@@ -53,11 +53,12 @@ El stack base está fijado en el wiki: `wiki/proyectos/sabre-playground/decision
 - Lint y formato: **Biome** (`biome.json`), sin ESLint. `src/components/ui/` entra al lint con
   algunas reglas apagadas para el código de shadcn. Después de `pnpm dlx shadcn add`, correr
   `pnpm format`: los componentes con íconos salen del CLI sin formatear.
-- CI: GitHub Actions (`.github/workflows/ci.yml`) corre `pnpm biome ci` y `pnpm build` en cada PR.
+- CI: GitHub Actions (`.github/workflows/ci.yml`) corre `pnpm biome ci`, `pnpm test` y
+  `pnpm build` en cada PR, en el job "biome, tests y build", que es el check exigido en `v2`.
 - `apartado/v1/` guarda piezas de la v1 que se rescatan en la Fase 4 (sesión y colas).
   Está fuera del build y del lint; se borra cuando ya no quede nada por rescatar.
 
-Comandos: `pnpm dev`, `pnpm lint`, `pnpm format`, `pnpm build`.
+Comandos: `pnpm dev`, `pnpm lint`, `pnpm format`, `pnpm test`, `pnpm build`.
 
 ## Seguimiento
 
