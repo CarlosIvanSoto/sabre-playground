@@ -14,14 +14,14 @@ import {
 } from "@/lib/environment"
 
 /**
- * Configuración por entorno, leída de `process.env` (`.env.local`).
+ * Configuración por entorno, leída de `process.env` (`.env`).
  *
  * - CERT es el entorno por defecto.
  * - Producción solo existe si `SABRE_PROD_ENABLED=true`, y siempre queda en solo lectura.
  * - Un solo juego de credenciales por entorno, armado con `buildCredentials`: el mismo
  *   `SabreConfig` va a `Sabre` (REST) y a `SabreLegacy` (SOAP).
  * - Si faltan variables, alguna es inválida o `buildCredentials` rechaza los datos, el entorno
- *   queda deshabilitado con la razón. La app arranca igual, también sin `.env.local`.
+ *   queda deshabilitado con la razón. La app arranca igual, también sin `.env`.
  *
  * Los `SabreConfig` resultantes nunca salen del servidor. Para la UI está
  * `getEnvironmentSummary()`, que no lleva valores.

@@ -18,7 +18,7 @@ pnpm install
 pnpm dev
 ```
 
-Abre <http://localhost:3000>. Sin `.env.local`, la consola arranca en el entorno **Fake**,
+Abre <http://localhost:3000>. Sin `.env`, la consola arranca en el entorno **Fake**,
 que no sale a la red:
 
 - **Colas (6)** y **Sesión SOAP (5)** corren contra `createQueueFake` de
@@ -34,10 +34,10 @@ que no sale a la red:
 ## Arrancar contra CERT
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
-Llena las variables `SABRE_CERT_*` y reinicia `pnpm dev`. `.env.local` está en
+Llena las variables `SABRE_CERT_*` y reinicia `pnpm dev`. `.env` está en
 `.gitignore`; nunca subas valores reales.
 
 | Variable | Qué es |
@@ -67,7 +67,7 @@ bandera, producción no aparece aunque haya credenciales.
   lecturas corren, y `remove` y `place` (también `process` con esas acciones) necesitan el
   desbloqueo explícito de la página, que se pierde al recargar, además de la confirmación de
   cada corrida. La server action lo vuelve a comprobar.
-- **Las credenciales no salen del servidor.** Se leen de `.env.local` en módulos
+- **Las credenciales no salen del servidor.** Se leen de `.env` en módulos
   `server-only`, y las llamadas a Sabre van por server actions. El token no llega al HTML ni
   al payload del cliente; en el SOAP crudo, el `BinarySecurityToken` llega como
   `[REDACTED]`.
