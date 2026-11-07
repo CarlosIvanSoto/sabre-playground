@@ -116,7 +116,10 @@ export interface CensusCountRow {
   /** La cola como texto: `9`, `S`. */
   queue: string
   count: number
-  /** Cola con nombre: se muestra, pero no se recorre (Q-086). */
+  /**
+   * Cola no numérica: la S (mensajes, ADR-028) o una con nombre (Q-086). Se muestra, pero no
+   * se recorre.
+   */
   named: boolean
 }
 
@@ -161,7 +164,7 @@ export interface QueueCensus {
   after?: CensusCount
   /** Las colas del rango con PNR, en el orden del conteo. */
   queues: CensusQueue[]
-  /** Las colas con nombre del conteo: no se recorren (Q-086). */
+  /** Las colas no numéricas del conteo (la S y las con nombre): no se recorren. */
   named: CensusCountRow[]
   /** La cola en la que está el recorrido. */
   current?: number

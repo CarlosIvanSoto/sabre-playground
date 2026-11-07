@@ -76,6 +76,8 @@ const RETURN_ONLY: GetBookingReturnOnly[] = [
 function censusStepOf(step: QueueStep, context: TraitContext): CensusStep {
   const warnings = step.warnings.map((warning) => warning.code)
   if (step.done) return { done: true, reason: step.reason, warnings }
+  // El censo recorre solo colas numéricas: un mensaje (cola S) no tendría que llegar.
+  if (step.kind !== "pnr") throw new TypeError("el censo solo lee PNR")
   let paragraph: QueueParagraph | undefined
   try {
     paragraph = parseQueueParagraph(step.item.paragraph, {
@@ -201,7 +203,10 @@ export async function censusFromScreen(
     const { item, pcc } = parsed.data
     const context = await sessionContext(id, pcc)
     const step = await runStep(async () => {
-      const result = censusStepOf({ done: false, item, warnings: [] }, context)
+      const result = censusStepOf(
+        { done: false, kind: "pnr", item, warnings: [] },
+        context
+      )
       if (result.done) throw new TypeError("sin PNR")
       return result.item
     })

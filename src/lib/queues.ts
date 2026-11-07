@@ -7,10 +7,22 @@ import { z } from "zod"
  * lo usan el cliente y el servidor, y del SDK solo importa tipos.
  */
 
-/** Una cola como texto: `9` (0–511) o un nombre de cola alfabética, `S`. */
+/** Una cola como texto: `9` (0–511), una alfabética (`S`) o un nombre (`HOTELS`). */
 export const QUEUE_PATTERN = /^(\d{1,3}|[A-Z][A-Z0-9]{0,9})$/
 
-/** `"9"` → `9`, `"s"` → `{ name: "S" }`. `undefined` si no es una cola válida. */
+/**
+ * La cola de mensajes del PCC (ADR-028): trae mensajes, no PNR, y Sabre no la lista. El SDK
+ * no exporta su constante, así que la consola la nombra acá.
+ */
+export const MESSAGE_QUEUE = "S"
+
+/** Cola alfabética: una o dos letras mayúsculas, como la valida el SDK (ADR-028). */
+const ALPHA_QUEUE = /^[A-Z]{1,2}$/
+
+/**
+ * `"9"` → `9`, `"s"` → `"S"`, `"hotels"` → `{ name: "HOTELS" }`. `undefined` si no es una
+ * cola válida.
+ */
 export function parseQueueRef(text: string): QueueRef | undefined {
   const value = text.trim().toUpperCase()
   if (!QUEUE_PATTERN.test(value)) return undefined
@@ -18,12 +30,13 @@ export function parseQueueRef(text: string): QueueRef | undefined {
     const number = Number(value)
     return number <= 511 ? number : undefined
   }
-  return { name: value }
+  return ALPHA_QUEUE.test(value) ? value : { name: value }
 }
 
 /** Lo contrario de `parseQueueRef`: para mostrar y para la ruta. */
 export function formatQueueRef(queue: QueueRef): string {
-  return typeof queue === "number" ? String(queue) : queue.name
+  if (typeof queue === "number") return String(queue)
+  return typeof queue === "string" ? queue : queue.name
 }
 
 export const queueRef = z.string().transform((text, context) => {

@@ -94,6 +94,8 @@ function cursorOf(
   run: StepRun
 ):
   | { kind: "item"; locator: string }
+  /** Un mensaje de la cola S: el cursor avanza, pero no hay PNR. */
+  | { kind: "message" }
   | { kind: "end"; reason: QueueEndReason; message: string }
   | { kind: "outside"; visited?: number }
   | undefined {
@@ -110,6 +112,7 @@ function cursorOf(
   const result = run.step.result as
     | {
         done?: boolean
+        kind?: string
         item?: { locator?: string }
         reason?: QueueEndReason
         message?: string
@@ -126,6 +129,7 @@ function cursorOf(
       message: result.message ?? "",
     }
   }
+  if (result.kind === "message") return { kind: "message" }
   return typeof result.item?.locator === "string"
     ? { kind: "item", locator: result.item.locator }
     : undefined
@@ -154,6 +158,13 @@ export function queueJourneyReducer(
           return {
             ...next,
             current: cursor.locator,
+            visited: visited + 1,
+            ended: undefined,
+          }
+        case "message":
+          return {
+            ...next,
+            current: undefined,
             visited: visited + 1,
             ended: undefined,
           }

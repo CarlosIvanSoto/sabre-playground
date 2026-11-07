@@ -14,7 +14,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { type DeskDestination, workingPcc } from "@/lib/queue-desk"
-import { instructionCode, PCC_PATTERN, parseQueueRef } from "@/lib/queues"
+import {
+  formatQueueRef,
+  instructionCode,
+  PCC_PATTERN,
+  parseQueueRef,
+} from "@/lib/queues"
 
 /**
  * Las escrituras de la mesa (F9.3): mover el PNR en pantalla a otra cola (`place` dentro de la
@@ -79,7 +84,7 @@ export function MoveControl({
   const to: DeskDestination | undefined =
     invalid === undefined && ref !== undefined && code.success
       ? {
-          queue: typeof ref === "number" ? String(ref) : ref.name,
+          queue: formatQueueRef(ref),
           pcc: toPcc,
           instructionCode: String(code.data),
         }

@@ -666,7 +666,7 @@ function CensusProgress({
       )}
       {census.named.length > 0 && (
         <p className="text-muted-foreground text-xs">
-          Colas con nombre, que no se recorren (Q-086):{" "}
+          Colas que no se recorren, la S (mensajes) y las con nombre (Q-086):{" "}
           {census.named.map((row) => `${row.queue} (${row.count})`).join(", ")}.
         </p>
       )}
