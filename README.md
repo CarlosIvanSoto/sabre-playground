@@ -22,9 +22,10 @@ Abre <http://localhost:3000>. Sin `.env`, la consola arranca en el entorno **Fak
 que no sale a la red:
 
 - **Colas (6)** y **Sesión SOAP (5)** corren contra `createQueueFake` de
-  `sabre-client/testing`. Las colas se arman con `queueFixtures`, respuestas anonimizadas
-  que se grabaron en producción: la cola `9` tiene cuatro PNR, la `50` está vacía y
-  `AAAAAE` queda fuera de las colas para probar `place`. Prueba abrir la sesión, `count`,
+  `sabre-client/testing`. Las colas se arman con `queueFakePnrs` y `queueFixtures`,
+  respuestas anonimizadas que se grabaron en producción: la cola `9` tiene cuatro PNR, la
+  `50` está vacía y `AAAAAE` y `AAAAAF` quedan fuera de las colas para probar `place`.
+  Prueba abrir la sesión, `count`,
   `access` en la 9 e `ignore` hasta el fin de cola. "Reiniciar el fake", arriba en la
   página de colas, devuelve las colas a como estaban.
 - **Párrafo de cola (7)** corre siempre: es un parser sin red.
