@@ -4,7 +4,7 @@ import {
   censusFileName,
   distinctPicTexts,
   isSafeLine,
-  maskParagraph,
+  maskCensusParagraph,
   validateCensusExport,
 } from "./census-export.ts"
 import { census, context, PCC } from "./census-fixture.ts"
@@ -256,18 +256,66 @@ describe("isSafeLine", () => {
     assert.ok(isSafeLine(""))
   })
 
-  it("no deja pasar una línea de lista con localizador", () => {
-    const line = "100  ABC123  PLT  MAM  01JUN26  1948"
-    assert.ok(!isSafeLine(line))
-    assert.deepEqual(maskParagraph([line]), [
-      "999  XXX999  XXX  XXX  99XXX99  9999",
-    ])
+  it("deja pasar la firma y RECEIVED FROM como las deja el SDK", () => {
+    assert.ok(isSafeLine("9XXX.9XXX*XXX 9999/99XXX99 XXX999 H"))
+    assert.ok(isSafeLine("RECEIVED FROM - XXX"))
+  })
+
+  it("no deja pasar una firma con el sine, el PCC, la hora o el localizador", () => {
+    assert.ok(!isSafeLine("Z9Z9.Z9Z9*ABC 9999/99XXX99 XXXXXX H"))
+    assert.ok(!isSafeLine("9XXX.9XXX*XXX 1948/01JUN26 XXXXXX H"))
+    assert.ok(!isSafeLine("9XXX.9XXX*XXX 9999/99XXX99 TESTAA H"))
+    assert.ok(!isSafeLine("9XXX.9XXX*XXX 9999/99XXX99 AAAAAA H"))
+  })
+
+  it("no deja pasar el aviso PIC con dígitos: una línea de lista trae el sine", () => {
+    assert.ok(!isSafeLine("100  ABC123  PLT  MAM  01JUN26  1948"))
+    assert.ok(!isSafeLine("011  SEE REMARKS 2"))
   })
 
   it("no deja pasar una línea con datos", () => {
     assert.ok(!isSafeLine(" 1.1TEST/PASSENGER"))
-    assert.ok(!isSafeLine("RECEIVED FROM - XXX"))
+    assert.ok(!isSafeLine("RECEIVED FROM - TEST"))
     assert.ok(!isSafeLine("ñ"))
+  })
+})
+
+describe("maskCensusParagraph", () => {
+  // Un párrafo sintético: localizador de prueba, PCC inventado (`Z9Z9`) y sine `ABC`.
+  const paragraph = [
+    "011  SEE REMARKS",
+    " 1.1TEST/PASSENGER",
+    "100  ABC123  PLT  MAM  01JUN26  1948",
+    "RECEIVED FROM - TEST",
+    "Z9Z9.Z9Z9*ABC 1948/01JUN26 TESTAA H",
+  ]
+
+  it("enmascara con el SDK: la firma conserva su forma, sin localizador", () => {
+    const masked = maskCensusParagraph(paragraph)
+    assert.deepEqual(masked, [
+      "011  SEE REMARKS",
+      " 9.9XXXX/XXXXXXXXX",
+      "999  XXX999  XXX  XXX  99XXX99  9999",
+      "RECEIVED FROM - XXXX",
+      "X9X9.X9X9*XXX 9999/99XXX99 XXXXXX H",
+    ])
+    assert.ok(masked.every(isSafeLine))
+    const text = masked.join("\n")
+    for (const leak of [PCC, "ABC", "TESTAA"]) assert.ok(!text.includes(leak))
+  })
+
+  it("no recuerda localizadores entre llamadas: tampoco da alias", () => {
+    maskCensusParagraph(["Z9Z9.Z9Z9*ABC 1948/01JUN26 AAAAAB H"])
+    assert.deepEqual(
+      maskCensusParagraph(["Z9Z9.Z9Z9*ABC 1948/01JUN26 AAAAAB H"]),
+      ["X9X9.X9X9*XXX 9999/99XXX99 XXXXXX H"]
+    )
+  })
+
+  it("el anexo enmascarado pasa el validador", () => {
+    const doc = census()
+    doc.annex.paragraphs[0].lines = maskCensusParagraph(paragraph)
+    assert.deepEqual(validateCensusExport(doc, context), [])
   })
 })
 
