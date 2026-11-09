@@ -211,7 +211,8 @@ function FakeQueuesStep({ open }: { open: boolean }) {
           <code>sabre-client/testing</code>, sembrado con{" "}
           <code>queueFixtures</code> (respuestas anonimizadas de producción). La
           cola 9 tiene los 4 PNR de <code>walk</code>, la 50 está vacía y{" "}
-          <code>AAAAAE</code> queda fuera de las colas, para <code>place</code>.
+          <code>AAAAAE</code> y <code>AAAAAF</code> quedan fuera de las colas,
+          para <code>place</code>.
         </>
       }
       run={latest}
