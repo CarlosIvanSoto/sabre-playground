@@ -11,12 +11,10 @@ import { z } from "zod"
 export const QUEUE_PATTERN = /^(\d{1,3}|[A-Z][A-Z0-9]{0,9})$/
 
 /**
- * La cola de mensajes del PCC (ADR-028): trae mensajes, no PNR, y Sabre no la lista. El SDK
- * no exporta su constante, así que la consola la nombra acá.
+ * Cola alfabética: una o dos letras mayúsculas, como la valida el SDK (ADR-028). La de mensajes
+ * es la `S`: el SDK exporta `MESSAGE_QUEUE` e `isMessageQueue` desde la 0.5.1. La consola no
+ * los necesita: los pasos distinguen el mensaje por `step.kind`.
  */
-export const MESSAGE_QUEUE = "S"
-
-/** Cola alfabética: una o dos letras mayúsculas, como la valida el SDK (ADR-028). */
 const ALPHA_QUEUE = /^[A-Z]{1,2}$/
 
 /**

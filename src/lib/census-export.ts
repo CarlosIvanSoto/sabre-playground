@@ -1,4 +1,4 @@
-import { createAnonymizer, isSafeHostLine } from "sabre-client/testing"
+import { createAnonymizer, isSafeHostLine } from "sabre-client/anonymize"
 import type { BookingTraits, CensusPic } from "./census-traits.ts"
 import { TRAIT_PATTERNS as P } from "./census-traits.ts"
 import type { QueueCensus } from "./queue-census.ts"
@@ -14,6 +14,10 @@ import type { QueueCensus } from "./queue-census.ts"
  * - `pnr` coincide con un localizador que leyó la consola;
  * - los textos PIC no tienen forma de nombre, y las líneas del anexo están enmascaradas.
  * Si algo falla, el censo no se exporta y se dice qué campo de qué PNR.
+ *
+ * Corre en el navegador: `createAnonymizer` e `isSafeHostLine` vienen de `sabre-client/anonymize`
+ * (F12.5, #130), la subruta liviana de la 0.5.1, y no de `sabre-client/testing`, que arrastra el
+ * fake y las `queueFixtures` al bundle de `/queue-census` (ADR-006).
  *
  * El JSON se descarga o se copia; nunca se escribe en el repo (`.gitignore` cubre
  * `censo-colas-*.json`). Este módulo no importa nada de la app con `@/`, para que sus tests corran
@@ -80,7 +84,7 @@ export interface QueueCensusExport {
 // --- Párrafo enmascarado (regla de #96, ADR-018; F11.2) -----------------------------------
 
 /**
- * El párrafo del anexo, enmascarado con `maskParagraph` de `sabre-client/testing` (#165 del SDK,
+ * El párrafo del anexo, enmascarado con `maskParagraph` del anonimizador (#165 del SDK,
  * ADR-027 D1): las líneas de `isSafeHostLine` quedan tal cual; en las demás, letras a `X` y
  * dígitos a `9`. La firma conserva su forma (`9XXX.9XXX*XXX 9999/99XXX99 XXXXXX H`), sin el
  * sine, el PCC ni el localizador.
