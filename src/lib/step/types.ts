@@ -1,4 +1,8 @@
-import type { SabreLogLevel, SabreRawResponse } from "sabre-client"
+import type {
+  SabreLogLevel,
+  SabreRawRequest,
+  SabreRawResponse,
+} from "sabre-client"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 
 /**
@@ -18,6 +22,15 @@ export interface LogLine {
 
 /** `SabreRawResponse` con los headers como objeto, para que viaje en el payload. */
 export interface RawResponse extends Omit<SabreRawResponse, "headers"> {
+  headers: Record<string, string>
+}
+
+/**
+ * `SabreRawRequest` con los headers como objeto: lo que el SDK mandó por la red en el último
+ * intento (ADR-029). Viene sin `Authorization` y, en SOAP, con el token tapado. Auth
+ * (OAuth, `SessionCreateRQ`, `SessionCloseRQ`) no lo trae. Vive en memoria, como el historial.
+ */
+export interface RawRequest extends Omit<SabreRawRequest, "headers"> {
   headers: Record<string, string>
 }
 
@@ -42,6 +55,8 @@ export interface StepResult<T = unknown> {
   result?: T
   /** Body del último intento HTTP, también cuando la llamada lanza. */
   raw?: RawResponse
+  /** Request del último intento que se mandó, también cuando no hubo respuesta HTTP. */
+  rawRequest?: RawRequest
   error?: StepError
   /**
    * `warnings` del resultado, si el SDK los devolvió sin lanzar (`booking.get`, `air.getSeats`…).
@@ -53,7 +68,10 @@ export interface StepResult<T = unknown> {
   /** Lo que el SDK mandó al logger durante la llamada, ya redactado. */
   log: LogLine[]
   durationMs: number
-  /** Intentos HTTP, contando los reintentos. Sin respuesta HTTP no se sabe. */
+  /**
+   * Intentos HTTP, contando los reintentos. Sin respuesta HTTP sale del request crudo, y en
+   * auth (sin request crudo) no se sabe.
+   */
   attempts?: number
 }
 
