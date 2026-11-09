@@ -101,34 +101,54 @@ export type QueueActivityInput = z.input<typeof queueActivitySchema>
 export type QueueActivityOutput = z.output<typeof queueActivitySchema>
 
 /**
- * Los ocho contadores de `queue.activity` (el `QA` del host), en el orden del SDK, con una
- * etiqueta corta para la mesa. Nadie sabe desde cuándo cuentan (Q-097): la consola los
- * muestra sin interpretarlos.
+ * Los ocho contadores de `queue.activity` (el `QA` del host), en el orden del SDK, con cómo se
+ * nombran en la mesa (singular y plural). Nadie sabe desde cuándo cuentan (Q-097): la consola
+ * los muestra sin interpretarlos.
  */
 export const ACTIVITY_COUNTERS = [
   {
     key: "numMessages",
-    short: "en cola",
+    words: ["en cola", "en cola"],
     label: "NumMessages: hoy en la cola",
   },
-  { key: "ended", short: "fin", label: "Ended: terminados" },
-  { key: "ignored", short: "ign", label: "Ignored: ignorados" },
-  { key: "moved", short: "mov", label: "Moved: movidos a otra cola" },
-  { key: "removed", short: "sac", label: "Removed: sacados (QR)" },
-  { key: "transferred", short: "trf", label: "Transferred: transferidos" },
+  {
+    key: "ended",
+    words: ["terminado", "terminados"],
+    label: "Ended: terminados",
+  },
+  {
+    key: "ignored",
+    words: ["ignorado", "ignorados"],
+    label: "Ignored: ignorados",
+  },
+  {
+    key: "moved",
+    words: ["movido", "movidos"],
+    label: "Moved: movidos a otra cola",
+  },
+  {
+    key: "removed",
+    words: ["sacado", "sacados"],
+    label: "Removed: sacados (QR)",
+  },
+  {
+    key: "transferred",
+    words: ["transferido", "transferidos"],
+    label: "Transferred: transferidos",
+  },
   {
     key: "leftMessageToContact",
-    short: "msj",
+    words: ["con mensaje", "con mensaje"],
     label: "LeftMessageToContact: con mensaje al contacto",
   },
   {
     key: "unableToReach",
-    short: "s/c",
+    words: ["sin contactar", "sin contactar"],
     label: "UnableToReach: sin contactar",
   },
 ] as const satisfies readonly {
   key: keyof QueueActivityCounters
-  short: string
+  words: readonly [string, string]
   label: string
 }[]
 
