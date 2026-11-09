@@ -165,7 +165,7 @@ export function census(): QueueCensusExport {
             " 9 XX999X 99XXX 9 XXXXXX XX9  9999  9999",
             "TKT/TIME LIMIT",
             "",
-            "XXXX.XXXX*XXX 9999/99XXX99 XXXXXX X",
+            "9XXX.9XXX*XXX 9999/99XXX99 XXXXXX H",
           ],
         },
       ],
