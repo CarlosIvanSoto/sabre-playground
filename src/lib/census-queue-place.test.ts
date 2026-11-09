@@ -52,6 +52,19 @@ describe("parseQueuePlace", () => {
     assert.equal(parseQueuePlace("ABC32SEP146/015", "ABC"), undefined)
     assert.equal(parseQueuePlace("ABC25SEP600/015", "ABC"), undefined)
     assert.equal(parseQueuePlace("ABC25SEP146/195", "ABC"), undefined)
+    assert.equal(parseQueuePlace("ABC00SEP146/015", "ABC"), undefined)
+  })
+
+  it("recorta los espacios, pero no pasa a mayúsculas (como el SDK)", () => {
+    assert.equal(parseQueuePlace("  HDQ05JUL313/036 ", "")?.queue, 313)
+    // Antes de F12.4 el censo lo aceptaba: pasaba el texto a mayúsculas. Sabre no manda minúsculas.
+    assert.equal(parseQueuePlace("abc25sep146/015", "ABC"), undefined)
+  })
+
+  it("acepta los dos rangos de PIC y la cola 0", () => {
+    assert.equal(parseQueuePlace("ABC25SEP0/000", "ABC")?.queue, 0)
+    assert.equal(parseQueuePlace("ABC25SEP146/254", "ABC")?.pic, 254)
+    assert.equal(parseQueuePlace("ABC25SEP146/192", "ABC"), undefined)
   })
 })
 
