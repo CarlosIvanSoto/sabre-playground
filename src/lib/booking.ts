@@ -48,5 +48,19 @@ export const bookingCancelSchema = z.object({
 
 export type BookingCancelInput = z.input<typeof bookingCancelSchema>
 
+/**
+ * `reservation.history` (F12.3): el localizador es obligatorio y de 6 caracteres, como lo valida
+ * el SDK (sin red, `TypeError`). La forma sin localizador (`JX HST` del AAA) no se ofrece.
+ */
+export const reservationHistorySchema = z.object({
+  locator: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{6}$/, "seis letras o dígitos"),
+})
+
+export type ReservationHistoryInput = z.input<typeof reservationHistorySchema>
+
 /** Localizador sintético que no existe en CERT: termina en `BOOKING_NOT_FOUND`. */
 export const MISSING_LOCATOR = "AAAAAA"

@@ -1,10 +1,15 @@
 "use server"
 
-import { bookingCancelSchema, bookingGetSchema } from "@/lib/booking"
+import {
+  bookingCancelSchema,
+  bookingGetSchema,
+  reservationHistorySchema,
+} from "@/lib/booking"
 import type { StepRun } from "@/lib/step/types"
 import { getEnvironment } from "@/server/config/environments"
 import { getSabre } from "@/server/sabre/clients"
 import { runStep } from "@/server/sabre/run-step"
+import { withRegisteredSession } from "@/server/sabre/sessions"
 import { inEnvironment } from "@/server/sabre/step-action"
 
 /**
@@ -17,6 +22,10 @@ import { inEnvironment } from "@/server/sabre/step-action"
  * - `booking.cancel` es una escritura sin reintento, siempre con `cancelAll: true`. El SDK trata
  *   `NO_ITEMS_CANCELLED` como fallo. En producción no corre (solo lectura): la UI no lo ofrece y
  *   esta action lo rechaza igual.
+ *
+ * - `reservation.history` (F12.3) es SOAP: corre en la sesión registrada del navegador, como las
+ *   colas, y también en fake. Dentro de una cola, Sabre lo rechaza para otro PNR que el del AAA
+ *   (`NAK6`, Q-102): sale como `SabreBusinessError` y la sesión sigue en la cola.
  *
  * Las server actions son endpoints públicos: el entorno y la entrada se validan acá.
  */
@@ -68,5 +77,18 @@ export async function cancelBooking(
         )
       ),
     }
+  })
+}
+
+export async function reservationHistory(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const parsed = reservationHistorySchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    return withRegisteredSession(id, (session, options) =>
+      session.reservation.history(parsed.data.locator, options)
+    )
   })
 }

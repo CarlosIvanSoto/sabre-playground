@@ -12,11 +12,13 @@ import type { ReactNode } from "react"
 import { useState } from "react"
 import type { GetBookingResponse } from "sabre-client"
 import { cancelBooking, getBooking } from "@/app/(console)/booking/actions"
+import { PnrHistoryView } from "@/components/booking/pnr-history"
 import { JsonTree } from "@/components/custom/json-tree"
 import { EnvironmentBadge } from "@/components/environment/environment-badge"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { Confirm } from "@/components/queue-desk/desk-write"
 import { RawBody } from "@/components/step/raw-body"
+import { StepOutput } from "@/components/step/step-panel"
 import { useStep } from "@/components/step/use-step"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -47,7 +49,20 @@ import type { StepRun } from "@/lib/step/types"
  *   `booking.get` que lo comprueba.
  * - Cancelar no saca el PNR de la cola: después la hoja ofrece sacarlo (`remove`), con su
  *   propia confirmación. No se encadenan solos.
+ *
+ * El historial (`reservation.history`, F12.3) va en la hoja, por SOAP en la sesión de la mesa.
+ * Dentro de una cola, solo el del PNR en pantalla: otro da `NAK6` (Q-102), así que la mesa no
+ * lo ofrece. Lo corre la mesa, que sabe dónde está el cursor.
  */
+
+/** El historial de la hoja: lo corre la mesa y la hoja lo muestra. */
+export interface SheetHistory {
+  run?: StepRun
+  pending: boolean
+  /** Por qué no se puede pedir ahora; `undefined` si se puede. */
+  reason?: string
+  onRun: () => void
+}
 export function BookingSheet({
   locator,
   pcc,
@@ -55,6 +70,7 @@ export function BookingSheet({
   pending,
   onClose,
   removeFromQueue,
+  history,
 }: {
   /** El localizador abierto; sin él, la hoja está cerrada. */
   locator?: string
@@ -66,6 +82,7 @@ export function BookingSheet({
   onClose: () => void
   /** "Sacar de la cola", si el PNR sigue en pantalla dentro de la cola. */
   removeFromQueue?: ReactNode
+  history: SheetHistory
 }) {
   return (
     // No modal: la mesa sigue a la vista, sin velo, para leer la reserva junto al párrafo.
@@ -85,6 +102,7 @@ export function BookingSheet({
             run={run}
             pending={pending}
             removeFromQueue={removeFromQueue}
+            history={history}
           />
         )}
       </SheetContent>
@@ -98,12 +116,14 @@ function SheetBody({
   run,
   pending,
   removeFromQueue,
+  history,
 }: {
   locator: string
   pcc: string
   run?: StepRun
   pending: boolean
   removeFromQueue?: ReactNode
+  history: SheetHistory
 }) {
   const { environment } = useEnvironment()
   const cancel = useStep("booking.cancel", cancelBooking)
@@ -172,6 +192,31 @@ function SheetBody({
       </SheetHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <StepTabs run={run} pending={pending} name={`booking-${locator}`} />
+        <section className="flex flex-col gap-2 border-t pt-4">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-medium">Historial del PNR</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={history.pending || history.reason !== undefined}
+              title={history.reason}
+              onClick={history.onRun}
+            >
+              {history.run === undefined ? "Ver historial" : "Volver a pedir"}
+            </Button>
+          </div>
+          {history.reason !== undefined && (
+            <p className="text-muted-foreground text-xs">{history.reason}</p>
+          )}
+          {(history.pending || history.run !== undefined) && (
+            <StepOutput
+              run={history.run}
+              pending={history.pending}
+              title="reservation.history"
+              resultView={(result) => <PnrHistoryView result={result} />}
+            />
+          )}
+        </section>
         <section className="flex flex-col gap-2 border-t pt-4">
           <h3 className="text-sm font-medium">Cancelar la reserva</h3>
           {!cancelled && (
