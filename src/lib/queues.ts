@@ -1,4 +1,4 @@
-import type { QueueRef } from "sabre-client"
+import type { QueueActivityCounters, QueueRef } from "sabre-client"
 import { z } from "zod"
 
 /**
@@ -95,6 +95,42 @@ const unlock = z.boolean().default(false)
 export const queueCountSchema = z.object({ pcc: optionalPcc })
 export type QueueCountInput = z.input<typeof queueCountSchema>
 export type QueueCountOutput = z.output<typeof queueCountSchema>
+
+export const queueActivitySchema = z.object({ pcc: optionalPcc })
+export type QueueActivityInput = z.input<typeof queueActivitySchema>
+export type QueueActivityOutput = z.output<typeof queueActivitySchema>
+
+/**
+ * Los ocho contadores de `queue.activity` (el `QA` del host), en el orden del SDK, con una
+ * etiqueta corta para la mesa. Nadie sabe desde cuándo cuentan (Q-097): la consola los
+ * muestra sin interpretarlos.
+ */
+export const ACTIVITY_COUNTERS = [
+  {
+    key: "numMessages",
+    short: "en cola",
+    label: "NumMessages: hoy en la cola",
+  },
+  { key: "ended", short: "fin", label: "Ended: terminados" },
+  { key: "ignored", short: "ign", label: "Ignored: ignorados" },
+  { key: "moved", short: "mov", label: "Moved: movidos a otra cola" },
+  { key: "removed", short: "sac", label: "Removed: sacados (QR)" },
+  { key: "transferred", short: "trf", label: "Transferred: transferidos" },
+  {
+    key: "leftMessageToContact",
+    short: "msj",
+    label: "LeftMessageToContact: con mensaje al contacto",
+  },
+  {
+    key: "unableToReach",
+    short: "s/c",
+    label: "UnableToReach: sin contactar",
+  },
+] as const satisfies readonly {
+  key: keyof QueueActivityCounters
+  short: string
+  label: string
+}[]
 
 export const queueListSchema = z.object({
   queue: queueRef,

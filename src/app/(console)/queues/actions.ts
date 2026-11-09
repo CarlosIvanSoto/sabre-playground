@@ -7,6 +7,7 @@ import {
   type ProcessVisit,
   parseQueueRef,
   queueAccessSchema,
+  queueActivitySchema,
   queueCountSchema,
   queueListSchema,
   queuePlaceSchema,
@@ -32,7 +33,7 @@ import { inEnvironment } from "@/server/sabre/step-action"
  * Flujo 6: colas (F4.3, #19), dentro de la sesión registrada del navegador (F4.1).
  *
  * Permisos (decisión del usuario, 2026-11-04, plan-v2):
- * - Lecturas (`count`, `list`, `access`, `ignore`, `exit`): en todos los entornos, también
+ * - Lecturas (`count`, `activity`, `list`, `access`, `ignore`, `exit`): en todos los entornos, también
  *   en producción.
  * - `remove`, `place` y `process` con esas acciones: en CERT y fake, con la confirmación de
  *   cada corrida en la UI. En producción, además, solo con el desbloqueo explícito: sin
@@ -63,6 +64,20 @@ export async function queueCount(
     if (!parsed.success) return INVALID
     return withRegisteredSession(id, (session, options) =>
       session.queue.count(parsed.data, options)
+    )
+  })
+}
+
+/** Lectura, como `count`: no cambia `state` y se puede llamar dentro o fuera de una cola. */
+export async function queueActivity(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const parsed = queueActivitySchema.safeParse(input)
+    if (!parsed.success) return INVALID
+    return withRegisteredSession(id, (session, options) =>
+      session.queue.activity(parsed.data, options)
     )
   })
 }

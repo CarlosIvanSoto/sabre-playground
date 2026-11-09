@@ -1,22 +1,28 @@
 "use client"
 
 import { useState } from "react"
+import type { QueueActivityCounters } from "sabre-client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { type DeskCount, workingPcc } from "@/lib/queue-desk"
-import { PCC_PATTERN, parseQueueRef } from "@/lib/queues"
+import { type DeskActivity, type DeskCount, workingPcc } from "@/lib/queue-desk"
+import { ACTIVITY_COUNTERS, PCC_PATTERN, parseQueueRef } from "@/lib/queues"
 import { cn } from "@/lib/utils"
 
 /**
  * La columna de conteo de la mesa: el resultado de `count` como lista. Un clic en una cola
  * numérica o en la S (mensajes) entra a ella; las colas con nombre se ven sin acción (Q-086). Como Sabre no lista
  * las colas vacías, abajo se puede escribir otra cola para entrar.
+ *
+ * Debajo de cada cola van los contadores de `queue.activity` que no están en cero (F12.2), y al
+ * final las colas vacías que tienen alguno. No se interpretan (Q-097).
  */
 export function DeskQueues({
   count,
   failure,
+  activity,
+  activityFailure,
   active,
   disabledReason,
   pending,
@@ -24,6 +30,8 @@ export function DeskQueues({
 }: {
   count?: DeskCount
   failure?: string
+  activity?: DeskActivity
+  activityFailure?: string
   /** La cola en la que está el cursor, si está dentro de una. */
   active?: string
   /** Por qué no se puede entrar ahora; `undefined` si se puede. */
@@ -86,9 +94,26 @@ export function DeskQueues({
                   </span>
                 </button>
               )}
+              <Counters counters={activity?.queues[row.queue]} />
             </li>
           ))}
         </ul>
+      )}
+      {activity !== undefined && activity.emptyWithCounters.length > 0 && (
+        <div className="flex flex-col gap-0.5 text-xs">
+          <span className="text-muted-foreground">Vacías con contadores</span>
+          {activity.emptyWithCounters.map((queue) => (
+            <div key={queue} className="px-2">
+              <span className="font-mono">{queue}</span>
+              <Counters counters={activity.queues[queue]} />
+            </div>
+          ))}
+        </div>
+      )}
+      {activityFailure !== undefined && (
+        <p className="text-destructive text-xs break-words">
+          queue.activity: {activityFailure}
+        </p>
       )}
       {count !== undefined && (
         <p className="text-muted-foreground border-t pt-2 text-xs">
@@ -104,12 +129,41 @@ export function DeskQueues({
           {count.countedAt !== undefined && (
             <span className="block font-mono">host {count.countedAt}</span>
           )}
+          {activity?.analyzedAt !== undefined && (
+            <span
+              className="block font-mono"
+              title="queue.activity: contadores sin interpretar (Q-097)"
+            >
+              QA {activity.analyzedAt}
+            </span>
+          )}
         </p>
       )}
       <OtherQueue disabled={disabled} onEnter={onEnter} />
       {disabledReason !== undefined && (
         <p className="text-muted-foreground text-xs">{disabledReason}</p>
       )}
+    </div>
+  )
+}
+
+/**
+ * Los contadores de `activity` de una cola que no están en cero, salvo `numMessages`, que ya es
+ * el número del conteo. El título de cada uno dice el nombre de Sabre.
+ */
+function Counters({ counters }: { counters?: QueueActivityCounters }) {
+  if (counters === undefined) return null
+  const shown = ACTIVITY_COUNTERS.filter(
+    ({ key }) => key !== "numMessages" && counters[key] !== 0
+  )
+  if (shown.length === 0) return null
+  return (
+    <div className="text-muted-foreground flex flex-wrap gap-x-2 ps-12 pe-2 text-xs tabular-nums">
+      {shown.map(({ key, short, label }) => (
+        <span key={key} title={`${label} (sin interpretar, Q-097)`}>
+          {short} {counters[key]}
+        </span>
+      ))}
     </div>
   )
 }
