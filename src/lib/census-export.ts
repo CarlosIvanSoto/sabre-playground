@@ -1,3 +1,4 @@
+import { createAnonymizer, isSafeHostLine } from "sabre-client/testing"
 import type { BookingTraits, CensusPic } from "./census-traits.ts"
 import { TRAIT_PATTERNS as P } from "./census-traits.ts"
 import type { QueueCensus } from "./queue-census.ts"
@@ -58,7 +59,7 @@ export interface CensusExportQueue {
 export interface CensusAnnexParagraph {
   ref: string
   pnr: string
-  /** El párrafo con la regla de #96: lista blanca tal cual, el resto con letras a X y dígitos a 9. */
+  /** El párrafo con `maskCensusParagraph`: lista blanca tal cual, el resto con letras a X y dígitos a 9. */
   lines: string[]
 }
 
@@ -76,42 +77,37 @@ export interface QueueCensusExport {
   annex: { paragraphs: CensusAnnexParagraph[] }
 }
 
-// --- Líneas seguras del párrafo (regla de #96, ADR-018) ----------------------------------
+// --- Párrafo enmascarado (regla de #96, ADR-018; F11.2) -----------------------------------
 
 /**
- * Las líneas del párrafo que quedan tal cual: no traen datos del pasajero. Es la lista blanca de
- * la anonimización de #96 (ADR-018). `sabre-client` no la exporta, así que la consola la repite
- * como regla, no como código del SDK.
+ * El párrafo del anexo, enmascarado con `maskParagraph` de `sabre-client/testing` (#165 del SDK,
+ * ADR-027 D1): las líneas de `isSafeHostLine` quedan tal cual; en las demás, letras a `X` y
+ * dígitos a `9`. La firma conserva su forma (`9XXX.9XXX*XXX 9999/99XXX99 XXXXXX H`), sin el
+ * sine, el PCC ni el localizador.
+ *
+ * Sin alias: el `Anonymizer` es nuevo en cada llamada, así que no conoce ningún localizador y
+ * los enmascara todos. Un alias (`AAAAAB`) tiene forma de localizador, chocaría con la regla de
+ * "ningún localizador leído fuera de `pnr`" (en fake, siempre) y no agrega nada: el anexo ya
+ * lleva el localizador en `pnr`.
  */
-export const SAFE_LINES: readonly RegExp[] = [
-  /^\s*$/,
-  // El aviso PIC, sin dígitos después del número: una línea de lista como
-  // `100  ABC123  PLT …` trae un localizador y no pasa (misma regla que `sabre-client`).
-  /^\s*\d{3}\s{2,}[A-Z][A-Z ,./-]*$/,
-  /^\s*END OF DISPLAY FOR REQUESTED DATA\s*$/,
-  /^\s*(TKT\/TIME LIMIT|PHONES|REMARKS|ADDRESS|INVOICED|GENERAL FACTS|[A-Z0-9]{2} FACTS|NO ITIN)\s*$/,
-  /^\s*PASSENGER EMAIL DATA EXISTS\s+\*PE TO DISPLAY ALL\s*$/,
-]
+export function maskCensusParagraph(lines: readonly string[]): string[] {
+  return createAnonymizer().maskParagraph(lines)
+}
 
 /** Una línea enmascarada: sin letras ni dígitos, salvo `X` y `9`. */
 const MASKED_LINE = /^[^\p{L}\p{N}]*(?:[X9][^\p{L}\p{N}]*)*$/u
 
-/**
- * El párrafo con la regla de #96 (ADR-018): las líneas de la lista blanca quedan tal cual; en las
- * demás, letras a `X` y dígitos a `9`. La línea de firma se tapa entera, localizador incluido.
- */
-export function maskParagraph(lines: readonly string[]): string[] {
-  return lines.map((line) =>
-    SAFE_LINES.some((pattern) => pattern.test(line))
-      ? line
-      : line.replace(/\p{L}/gu, "X").replace(/\p{N}/gu, "9")
-  )
-}
+/** `RECEIVED FROM - XX`: el SDK conserva el prefijo y enmascara el resto. */
+const RECEIVED_LINE = /^\s*RECEIVED FROM - (.*)$/
 
+/** La firma como la deja el SDK: todo enmascarado salvo la `H` final. */
+const SIGNATURE_LINE = /^(.*\s)9999\/99XXX99\s+[X9]{6}\s+H\s*$/
+
+/** Si una línea del anexo puede salir: de la lista blanca, o con una forma enmascarada. */
 export function isSafeLine(line: string): boolean {
-  return (
-    SAFE_LINES.some((pattern) => pattern.test(line)) || MASKED_LINE.test(line)
-  )
+  if (isSafeHostLine(line) || MASKED_LINE.test(line)) return true
+  const rest = RECEIVED_LINE.exec(line)?.[1] ?? SIGNATURE_LINE.exec(line)?.[1]
+  return rest !== undefined && MASKED_LINE.test(rest)
 }
 
 /**

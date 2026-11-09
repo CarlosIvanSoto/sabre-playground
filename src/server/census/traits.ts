@@ -6,7 +6,7 @@ import {
   type QueueParagraph,
   resolveHostDate,
 } from "sabre-client"
-import { maskParagraph } from "@/lib/census-export"
+import { maskCensusParagraph } from "@/lib/census-export"
 import { parseQueuePlaces } from "@/lib/census-queue-place"
 import {
   type AccountingTraits,
@@ -172,7 +172,7 @@ export function paragraphTraits(
     ),
     parseOk: parsed !== undefined,
     unparsedLines: parsed === undefined ? null : parsed.unparsed.length,
-    maskedParagraph: maskParagraph(item.paragraph),
+    maskedParagraph: maskCensusParagraph(item.paragraph),
   }
 }
 

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 /**
  * La columna de conteo de la mesa: el resultado de `count` como lista. Un clic en una cola
- * numérica entra a ella; las colas con nombre se ven sin acción (Q-086). Como Sabre no lista
+ * numérica o en la S (mensajes) entra a ella; las colas con nombre se ven sin acción (Q-086). Como Sabre no lista
  * las colas vacías, abajo se puede escribir otra cola para entrar.
  */
 export function DeskQueues({

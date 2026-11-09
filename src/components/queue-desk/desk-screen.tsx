@@ -11,6 +11,7 @@ import { type ReactNode, useState } from "react"
 import type { QueueItem, QueueParagraph, QueueStep } from "sabre-client"
 import { parseParagraph } from "@/app/(console)/queue-paragraph/actions"
 import { JsonTree } from "@/components/custom/json-tree"
+import { QueueMessageView } from "@/components/queues/queue-views"
 import { RawBody } from "@/components/step/raw-body"
 import { useStep } from "@/components/step/use-step"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -79,6 +80,14 @@ export function DeskScreenView({ screen }: { screen?: DeskScreen }) {
             {step.message}. La sesión queda fuera de la cola.
           </AlertDescription>
         </Alert>
+      </>
+    )
+  }
+  if (step.kind === "message") {
+    return (
+      <>
+        {notes}
+        <QueueMessageView text={step.message.text} />
       </>
     )
   }

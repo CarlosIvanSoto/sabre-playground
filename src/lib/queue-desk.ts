@@ -151,7 +151,8 @@ function countOf(run: StepRun): DeskCount | undefined {
     queues: response.queues.map(({ queue, count }) => ({
       queue: formatQueueRef(queue),
       count,
-      named: typeof queue !== "number",
+      // La S (cola de mensajes) es un string y se puede abrir; un `{ name }` no (Q-086).
+      named: typeof queue === "object",
     })),
     totals: response.totals ?? {},
     estimated: [],

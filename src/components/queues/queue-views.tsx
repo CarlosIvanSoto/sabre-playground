@@ -1,6 +1,6 @@
 "use client"
 
-import { Flag } from "lucide-react"
+import { Flag, MessageSquareText } from "lucide-react"
 import type {
   QueueCountResponse,
   QueuePlaceResult,
@@ -58,7 +58,7 @@ export function QueueCountView({
               <TableCell className="font-mono">{label}</TableCell>
               <TableCell className="text-right tabular-nums">{n}</TableCell>
               <TableCell className="text-right">
-                {typeof queue !== "number" ? (
+                {typeof queue === "object" ? (
                   // Q-086: en CERT, `list` y `access` con el `{ name }` que trae `count` dan
                   // `INVALID QUEUE NAME FORMAT`. No se ofrece; a mano, el error sale tal cual.
                   <span
@@ -105,6 +105,8 @@ export function QueueStepView({ result }: { result: unknown }) {
       </Alert>
     )
   }
+  if (step.kind === "message")
+    return <QueueMessageView text={step.message.text} />
   const { item } = step
   return (
     <div className="flex flex-col gap-3">
@@ -127,6 +129,25 @@ export function QueueStepView({ result }: { result: unknown }) {
       </Table>
       <pre className="bg-muted overflow-x-auto rounded-md p-3 font-mono text-xs">
         {item.paragraph.join("\n")}
+      </pre>
+    </div>
+  )
+}
+
+/** Un mensaje de la cola S (ADR-028): texto del host, sin PNR. Mostrarlo no lo borra. */
+export function QueueMessageView({ text }: { text: string[] }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <Alert>
+        <MessageSquareText />
+        <AlertTitle>Mensaje de la cola S</AlertTitle>
+        <AlertDescription>
+          La S trae mensajes, no PNR: no se lista ni se le hace place. Mostrarlo
+          no lo borra; queue.ignore pasa al siguiente.
+        </AlertDescription>
+      </Alert>
+      <pre className="bg-muted overflow-x-auto rounded-md p-3 font-mono text-xs">
+        {text.join("\n")}
       </pre>
     </div>
   )
