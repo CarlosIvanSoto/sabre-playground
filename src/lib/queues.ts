@@ -150,10 +150,53 @@ export const ACTIVITY_COUNTERS = [
   label: string
 }[]
 
+/** Una fila del editor de `selection`, como texto: el código y su valor. */
+export interface SelectionRow {
+  function: string
+  criteria: string
+}
+
+/**
+ * `selection` de `access` y `list` (F13.1, F13.2): la lista de filas del editor. Solo pasa a
+ * mayúsculas, quita los espacios y descarta las filas que quedaron vacías del todo. No valida
+ * códigos, valores ni cantidad: eso lo hace el SDK, y su `TypeError` (más de 8 filtros, un
+ * valor vacío o, en `list`, un código que no es `QD` ni `AK`) se ve como el error del paso.
+ * Sin filas da `undefined`: la llamada queda como sin filtro.
+ */
+export const queueSelection = z
+  .array(z.object({ function: z.string(), criteria: z.string() }))
+  .optional()
+  .transform((rows) => {
+    const selection = (rows ?? [])
+      .map((row) => ({
+        function: row.function.trim().toUpperCase(),
+        criteria: row.criteria.trim().toUpperCase(),
+      }))
+      .filter((row) => row.function !== "" || row.criteria !== "")
+    return selection.length > 0 ? selection : undefined
+  })
+
+/**
+ * La ayuda corta del editor: los códigos que más se usan al entrar a una cola, de la lista de
+ * Sabre (`wiki/sources/funciones-de-seleccion-de-colas`). Hay muchos más.
+ */
+export const SELECTION_CODES = [
+  { code: "QD", meaning: "fecha de colocación en la cola", example: "05NOV" },
+  { code: "AL", meaning: "aerolínea", example: "DL" },
+  { code: "AC", meaning: "código de acción o estado", example: "HL" },
+  { code: "PI", meaning: "código PIC", example: "11" },
+  {
+    code: "AK",
+    meaning: "agente que lo colocó (PCC + firma)",
+    example: "PCC1AAT",
+  },
+] as const
+
 export const queueListSchema = z.object({
   queue: queueRef,
   pcc: optionalPcc,
   primaryPassenger: z.boolean(),
+  selection: queueSelection,
 })
 export type QueueListInput = z.input<typeof queueListSchema>
 export type QueueListOutput = z.output<typeof queueListSchema>
@@ -161,6 +204,7 @@ export type QueueListOutput = z.output<typeof queueListSchema>
 export const queueAccessSchema = z.object({
   queue: queueRef,
   pcc: optionalPcc,
+  selection: queueSelection,
 })
 export type QueueAccessInput = z.input<typeof queueAccessSchema>
 export type QueueAccessOutput = z.output<typeof queueAccessSchema>

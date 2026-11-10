@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { initialQueueJourney, queueJourneyReducer } from "./queue-journey.ts"
-import { formatQueueRef, parseQueueRef } from "./queues.ts"
+import {
+  formatQueueRef,
+  parseQueueRef,
+  queueAccessSchema,
+  queueListSchema,
+} from "./queues.ts"
 import type { StepRun } from "./step/types.ts"
 
 /** `QueueRef` alfabético y `QueueStep.kind` de `sabre-client@0.5.0` (ADR-028, F11.1). */
@@ -64,5 +69,45 @@ describe("queueJourneyReducer con la cola S", () => {
     })
     assert.equal(state.current, "AAAAAA")
     assert.equal(state.visited, 1)
+  })
+})
+
+describe("queueAccessSchema.selection (F13.1)", () => {
+  const parse = (selection?: { function: string; criteria: string }[]) =>
+    queueAccessSchema.parse({ queue: "9", pcc: "", selection }).selection
+
+  it("sin filas no manda selection", () => {
+    assert.equal(parse(), undefined)
+    assert.equal(parse([]), undefined)
+    assert.equal(parse([{ function: " ", criteria: "" }]), undefined)
+  })
+
+  it("pasa a mayúsculas y quita espacios", () => {
+    assert.deepEqual(parse([{ function: " qd", criteria: "05nov " }]), [
+      { function: "QD", criteria: "05NOV" },
+    ])
+  })
+
+  it("no valida códigos, valores ni cantidad: eso es del SDK", () => {
+    const nine = Array.from({ length: 9 }, () => ({
+      function: "ZZ",
+      criteria: "",
+    }))
+    assert.equal(parse(nine)?.length, 9)
+    assert.deepEqual(parse([{ function: "", criteria: "DL" }]), [
+      { function: "", criteria: "DL" },
+    ])
+  })
+})
+
+describe("queueListSchema.selection (F13.2)", () => {
+  it("deja pasar un código que list no acepta: lo rechaza el SDK", () => {
+    const parsed = queueListSchema.parse({
+      queue: "9",
+      pcc: "",
+      primaryPassenger: false,
+      selection: [{ function: "pi", criteria: "11" }],
+    })
+    assert.deepEqual(parsed.selection, [{ function: "PI", criteria: "11" }])
   })
 })
