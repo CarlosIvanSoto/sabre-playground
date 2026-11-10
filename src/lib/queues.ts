@@ -196,6 +196,7 @@ export const queueListSchema = z.object({
   queue: queueRef,
   pcc: optionalPcc,
   primaryPassenger: z.boolean(),
+  selection: queueSelection,
 })
 export type QueueListInput = z.input<typeof queueListSchema>
 export type QueueListOutput = z.output<typeof queueListSchema>

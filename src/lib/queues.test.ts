@@ -1,7 +1,12 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { initialQueueJourney, queueJourneyReducer } from "./queue-journey.ts"
-import { formatQueueRef, parseQueueRef, queueAccessSchema } from "./queues.ts"
+import {
+  formatQueueRef,
+  parseQueueRef,
+  queueAccessSchema,
+  queueListSchema,
+} from "./queues.ts"
 import type { StepRun } from "./step/types.ts"
 
 /** `QueueRef` alfabético y `QueueStep.kind` de `sabre-client@0.5.0` (ADR-028, F11.1). */
@@ -92,5 +97,17 @@ describe("queueAccessSchema.selection (F13.1)", () => {
     assert.deepEqual(parse([{ function: "", criteria: "DL" }]), [
       { function: "", criteria: "DL" },
     ])
+  })
+})
+
+describe("queueListSchema.selection (F13.2)", () => {
+  it("deja pasar un código que list no acepta: lo rechaza el SDK", () => {
+    const parsed = queueListSchema.parse({
+      queue: "9",
+      pcc: "",
+      primaryPassenger: false,
+      selection: [{ function: "pi", criteria: "11" }],
+    })
+    assert.deepEqual(parsed.selection, [{ function: "PI", criteria: "11" }])
   })
 })

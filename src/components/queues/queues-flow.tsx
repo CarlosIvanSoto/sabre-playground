@@ -521,6 +521,7 @@ function ActivityStep({ disabledReason, journey }: PanelProps) {
 }
 
 function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
+  const { environment } = useEnvironment()
   const { run, pending, execute } = useStep("queue.list", queueList)
   const form = useForm<QueueListInput, unknown, QueueListOutput>({
     resolver: zodResolver(queueListSchema),
@@ -528,6 +529,7 @@ function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
       queue: journey.queue,
       pcc: journey.pcc,
       primaryPassenger: false,
+      selection: [],
     },
   })
   const errors = form.formState.errors
@@ -537,8 +539,9 @@ function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
       description={
         <>
           Los localizadores de una cola, sin entrar. No cambia{" "}
-          <code>state</code>. Su <code>placedAt</code> no es el de{" "}
-          <code>access</code>: se muestra tal cual.
+          <code>state</code>. Su <code>placedAt</code> es la colocación en la
+          cola, la fecha por la que filtra <code>QD</code>; no es el de{" "}
+          <code>access</code>.
         </>
       }
       run={run}
@@ -576,6 +579,31 @@ function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
                   primaryPassenger
                 </FieldLabel>
               </Field>
+            )}
+          />
+          <Controller
+            control={form.control}
+            name="selection"
+            render={({ field }) => (
+              <SelectionField
+                id="list-selection"
+                value={field.value ?? []}
+                onChange={field.onChange}
+                codes={["QD", "AK"]}
+                note={
+                  <>
+                    En <code>list</code>, Sabre solo acepta <code>QD</code> o{" "}
+                    <code>AK</code>. El campo acepta cualquier código: con otro,
+                    el SDK lanza <code>TypeError</code> sin request.
+                    {environment.id === "fake" && (
+                      <>
+                        {" "}
+                        <FakeSelectionNote />
+                      </>
+                    )}
+                  </>
+                }
+              />
             )}
           />
           <Blocked reason={disabledReason} />
