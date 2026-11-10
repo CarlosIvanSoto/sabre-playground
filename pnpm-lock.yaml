@@ -39,8 +39,8 @@ importers:
         specifier: ^7.91.0
         version: 7.91.0(@types/react@19.3.0)(react@19.3.1)
       sabre-client:
-        specifier: 0.5.0
-        version: 0.5.0
+        specifier: 0.5.1
+        version: 0.5.1
       server-only:
         specifier: ^0.0.1
         version: 0.0.1
@@ -1777,8 +1777,8 @@ packages:
   run-parallel@1.2.0:
     resolution: {integrity: sha512-5l4VyZR86LZ/lDxZTR6jqL8AFE2S0IFLMP26AbjsLVADxHdhB/c0GUsH+y39UfCi3dzz8OlQuPmnaJOMoDHQBA==}
 
-  sabre-client@0.5.0:
-    resolution: {integrity: sha512-yroviVpehuW8lcYoRa0yBIDZg3SOEGU4LkCmbV7f0gBmRaBOANa9YuN8D0014A0tR3KYGnAdQm2H3a6X9hQKew==}
+  sabre-client@0.5.1:
+    resolution: {integrity: sha512-z8VuQ5Kk439JoHecHduuKg6wDQHdzSIJsJaj/2fRTeZTQXueXrTKBeBwxIiMYexirPRc0Nhw/N2tDPRr38A8Gg==}
     engines: {node: '>=22.12'}
 
   scheduler@0.28.0:
@@ -3469,7 +3469,7 @@ snapshots:
     dependencies:
       queue-microtask: 1.2.3
 
-  sabre-client@0.5.0:
+  sabre-client@0.5.1:
     dependencies:
       fast-xml-parser: 5.12.0
 
