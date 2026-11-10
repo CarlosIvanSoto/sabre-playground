@@ -28,6 +28,7 @@ import {
   QueueCountView,
   QueueStepView,
 } from "@/components/queues/queue-views"
+import { SelectionField } from "@/components/queues/selection-field"
 import { SessionBar } from "@/components/session/session-bar"
 import { CloseStep, OpenStep } from "@/components/session/session-flow"
 import { useSessionStatus } from "@/components/session/use-session-status"
@@ -591,10 +592,11 @@ function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
 }
 
 function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
+  const { environment } = useEnvironment()
   const { run, pending, execute } = useStep("queue.access", queueAccess)
   const form = useForm<QueueAccessInput, unknown, QueueAccessOutput>({
     resolver: zodResolver(queueAccessSchema),
-    defaultValues: { queue: journey.queue, pcc: journey.pcc },
+    defaultValues: { queue: journey.queue, pcc: journey.pcc, selection: [] },
   })
   const errors = form.formState.errors
   return (
@@ -604,7 +606,8 @@ function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
         <>
           Entra a la cola y trae el primer PNR (<code>inside</code>). Una cola
           vacía da <code>{"{ done: true, reason: 'empty' }"}</code> y la sesión
-          sigue afuera.
+          sigue afuera. Con <code>selection</code>, solo los PNR que cumplen los
+          filtros; sin ninguno que cumpla, también <code>done</code>.
         </>
       }
       run={run}
@@ -629,6 +632,20 @@ function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
             error={errors.pcc}
             registration={form.register("pcc")}
           />
+          <Controller
+            control={form.control}
+            name="selection"
+            render={({ field }) => (
+              <SelectionField
+                id="access-selection"
+                value={field.value ?? []}
+                onChange={field.onChange}
+                note={
+                  environment.id === "fake" ? <FakeSelectionNote /> : undefined
+                }
+              />
+            )}
+          />
           <Blocked reason={disabledReason} />
           <Button
             type="submit"
@@ -639,6 +656,16 @@ function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
         </form>
       }
     />
+  )
+}
+
+/** El fake no simula `selection` (sabre#202): con filtros responde un error, no los filtra. */
+function FakeSelectionNote() {
+  return (
+    <>
+      Fake: no filtra. Con filtros responde un error en vez de la cola
+      (sabre#202).
+    </>
   )
 }
 
