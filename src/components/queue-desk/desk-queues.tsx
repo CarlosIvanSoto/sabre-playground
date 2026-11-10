@@ -10,52 +10,43 @@ import { type DeskActivity, type DeskCount, workingPcc } from "@/lib/queue-desk"
 import { ACTIVITY_COUNTERS, PCC_PATTERN, parseQueueRef } from "@/lib/queues"
 import { cn } from "@/lib/utils"
 
-/** Una fila de la lista: una cola del conteo, o una vacía que solo trae actividad. */
-interface Row {
-  queue: string
-  count: number
-  named: boolean
-  /** No está en el conteo: Sabre la listó en `activity` porque tiene contadores. */
-  empty: boolean
-}
+/** Una fila de la lista: una cola del conteo. */
+type Row = DeskCount["queues"][number]
 
 /** S y las alfabéticas primero, después las numéricas en orden, y al final las con nombre. */
-function rank(row: Row): [number, number, string] {
-  if (row.named) return [2, 0, row.queue]
-  return /^\d+$/.test(row.queue)
-    ? [1, Number(row.queue), row.queue]
-    : [0, 0, row.queue]
+function rank(queue: string, named = false): [number, number, string] {
+  if (named) return [2, 0, queue]
+  return /^\d+$/.test(queue) ? [1, Number(queue), queue] : [0, 0, queue]
 }
 
-function rowsOf(count: DeskCount, activity?: DeskActivity): Row[] {
-  const rows: Row[] = [
-    ...count.queues.map((row) => ({ ...row, empty: false })),
-    ...(activity?.emptyWithCounters ?? []).map((queue) => ({
-      queue,
-      count: 0,
-      named: false,
-      empty: true,
-    })),
-  ]
-  return rows.sort((a, b) => {
-    const [ga, na, ta] = rank(a)
-    const [gb, nb, tb] = rank(b)
+function byRank<T>(key: (item: T) => [number, number, string]) {
+  return (a: T, b: T) => {
+    const [ga, na, ta] = key(a)
+    const [gb, nb, tb] = key(b)
     return ga - gb || na - nb || ta.localeCompare(tb)
-  })
+  }
+}
+
+/** Solo las colas del conteo (F13.3): las que trae solo `activity` van en su bloque. */
+function rowsOf(count: DeskCount): Row[] {
+  return [...count.queues].sort(byRank((row) => rank(row.queue, row.named)))
 }
 
 /** `11-09T17:34` → `11-09 17:34`. */
 const hostTime = (text: string) => text.replace("T", " ")
 
 /**
- * La columna de colas de la mesa. Una sola lista con dos datos por cola:
- * - a la derecha, cuántos PNR o mensajes tiene ahora (`count`);
- * - debajo, en palabras, la actividad de `queue.activity` que no está en cero (F12.2). No se
- *   interpreta: nadie sabe desde cuándo cuenta (Q-097).
+ * La columna de colas de la mesa. La lista Cola / Ahora tiene solo las colas del conteo, con
+ * cuántos PNR o mensajes tiene cada una ahora (`count`).
  *
- * Las colas vacías que Sabre lista en `activity` van en la misma lista, con 0. Un clic en una
- * cola numérica o en la S (mensajes) entra a ella; las colas con nombre se ven sin acción
- * (Q-086). Como `count` no lista las vacías, abajo se puede escribir otra cola para entrar.
+ * Con el check «Actividad» (F13.3), debajo de cada cola va, en palabras, la actividad de
+ * `queue.activity` que no está en cero (F12.2), y las colas vacías que Sabre lista en
+ * `activity` van en un bloque aparte, no en la lista: no tienen PNR. No se interpreta: nadie
+ * sabe desde cuándo cuenta (Q-097).
+ *
+ * Un clic en una cola numérica o en la S (mensajes) entra a ella; las colas con nombre se ven
+ * sin acción (Q-086). Como `count` no lista las vacías, abajo se puede escribir otra cola para
+ * entrar.
  */
 export function DeskQueues({
   count,
@@ -79,7 +70,10 @@ export function DeskQueues({
   onEnter: (queue: string) => void
 }) {
   const disabled = pending || disabledReason !== undefined
-  const rows = count === undefined ? [] : rowsOf(count, activity)
+  const rows = count === undefined ? [] : rowsOf(count)
+  const onlyActivity = [...(activity?.emptyWithCounters ?? [])].sort(
+    byRank((queue: string) => rank(queue))
+  )
   return (
     <div className="flex flex-col gap-3 text-sm">
       {failure !== undefined && (
@@ -128,6 +122,9 @@ export function DeskQueues({
             </p>
           )}
         </div>
+      )}
+      {activity !== undefined && onlyActivity.length > 0 && (
+        <OnlyActivity queues={onlyActivity} activity={activity} />
       )}
       {activityFailure !== undefined && (
         <p className="text-destructive text-xs break-words">
@@ -220,7 +217,7 @@ function QueueRow({
           </span>
         </span>
       </span>
-      <Activity counters={counters} empty={row.empty} />
+      <Activity counters={counters} />
     </>
   )
   const base = "flex w-full flex-col items-start gap-0.5 px-2 py-1.5"
@@ -257,33 +254,61 @@ function QueueRow({
  * en cero, y sin `numMessages`, que es el número de la derecha. El título dice el nombre de
  * Sabre.
  */
-function Activity({
-  counters,
-  empty,
-}: {
-  counters?: QueueActivityCounters
-  empty: boolean
-}) {
+function Activity({ counters }: { counters?: QueueActivityCounters }) {
   const shown =
     counters === undefined
       ? []
       : ACTIVITY_COUNTERS.filter(
           ({ key }) => key !== "numMessages" && counters[key] !== 0
         )
-  if (shown.length === 0 && !empty) return null
+  if (counters === undefined || shown.length === 0) return null
   return (
     <span className="text-muted-foreground text-xs">
-      {empty && "vacía"}
-      {empty && shown.length > 0 && " · "}
-      {counters !== undefined &&
-        shown.map(({ key, words, label }, index) => (
-          <span key={key} title={label}>
-            {index > 0 && " · "}
-            <span className="tabular-nums">{counters[key]}</span>{" "}
-            {counters[key] === 1 ? words[0] : words[1]}
-          </span>
-        ))}
+      {shown.map(({ key, words, label }, index) => (
+        <span key={key} title={label}>
+          {index > 0 && " · "}
+          <span className="tabular-nums">{counters[key]}</span>{" "}
+          {counters[key] === 1 ? words[0] : words[1]}
+        </span>
+      ))}
     </span>
+  )
+}
+
+/**
+ * Las colas que solo vienen en `activity` (F13.3): Sabre las lista porque tienen contadores,
+ * pero el conteo no las trae porque no tienen PNR. Van aparte y sin acción; para entrar a una
+ * igual, está «Otra cola».
+ */
+function OnlyActivity({
+  queues,
+  activity,
+}: {
+  queues: string[]
+  activity: DeskActivity
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        className="text-muted-foreground px-2 text-xs"
+        title="Colas que lista queue.activity y no están en queue.count"
+      >
+        Solo en actividad, sin PNR
+      </div>
+      <ul
+        className="text-muted-foreground flex flex-col divide-y rounded-md border border-dashed"
+        aria-label="Colas solo en actividad"
+      >
+        {queues.map((queue) => (
+          <li key={queue} className="flex flex-col gap-0.5 px-2 py-1.5">
+            <span className="font-mono">
+              {queue === "S" ? "S · mensajes" : queue}
+            </span>
+            <Activity counters={activity.queues[queue]} />
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

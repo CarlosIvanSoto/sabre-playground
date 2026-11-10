@@ -48,8 +48,9 @@ export interface DeskCount {
 }
 
 /**
- * Los contadores de `queue.activity` (F12.2), por cola en texto. Se piden después de cada
- * `count` y no se ajustan con mover o sacar: valen lo del último ⟳. No se interpretan (Q-097).
+ * Los contadores de `queue.activity` (F12.2), por cola en texto. Solo con el check «Actividad»
+ * de la mesa (F13.3): se piden al prenderlo y después de cada `count`, y no se ajustan con mover
+ * o sacar: valen lo del último ⟳. No se interpretan (Q-097).
  */
 export interface DeskActivity {
   queues: Record<string, QueueActivityCounters>
