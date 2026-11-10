@@ -421,6 +421,48 @@ function QueueField({
   )
 }
 
+/**
+ * `range` de `count` y `activity` (F14.1): desde y hasta, como texto. La consola no los valida:
+ * un extremo vacío, `start >= end` o una cola junto con el rango los rechaza el SDK.
+ */
+function RangeFields({
+  id,
+  start,
+  end,
+}: {
+  id: string
+  start: UseFormRegisterReturn
+  end: UseFormRegisterReturn
+}) {
+  return (
+    <Field>
+      <FieldLabel htmlFor={`${id}-start`}>Rango (opcional)</FieldLabel>
+      <div className="flex items-center gap-2">
+        <Input
+          id={`${id}-start`}
+          aria-label="Desde"
+          placeholder="1"
+          inputMode="numeric"
+          className="w-20 font-mono"
+          {...start}
+        />
+        <span className="text-muted-foreground">–</span>
+        <Input
+          id={`${id}-end`}
+          aria-label="Hasta"
+          placeholder="25"
+          inputMode="numeric"
+          className="w-20 font-mono"
+          {...end}
+        />
+      </div>
+      <FieldDescription>
+        Colas numéricas, vacías incluidas. El SDK valida los extremos.
+      </FieldDescription>
+    </Field>
+  )
+}
+
 function CountStep({
   disabledReason,
   journey,
@@ -430,8 +472,14 @@ function CountStep({
   const { run, pending, execute } = useStep("queue.count", queueCount)
   const form = useForm<QueueCountInput, unknown, QueueCountOutput>({
     resolver: zodResolver(queueCountSchema),
-    defaultValues: { pcc: journey.pcc },
+    defaultValues: {
+      pcc: journey.pcc,
+      queue: "",
+      range: { start: "", end: "" },
+      selection: [],
+    },
   })
+  const errors = form.formState.errors
   return (
     <StepPanel
       title="queue.count"
@@ -440,7 +488,10 @@ function CountStep({
           <code>QueueCountLLSRQ</code>: las colas con algo, más los totales. No
           cambia <code>state</code>. Dentro de una cola no cuenta el PNR
           abierto. <code>countedAt</code> va sin año y en hora del host. Elegir
-          una cola llena los pasos siguientes.
+          una cola llena los pasos siguientes. Con <code>queue</code>, solo esa;
+          con <code>range</code>, cada cola del rango, también las vacías.
+          <code>selection</code> necesita <code>queue</code>, y entonces{" "}
+          <code>totals.unfiltered</code> trae el total sin filtrar.
         </>
       }
       run={run}
@@ -459,8 +510,37 @@ function CountStep({
         >
           <PccField
             id="count-pcc"
-            error={form.formState.errors.pcc}
+            error={errors.pcc}
             registration={form.register("pcc")}
+          />
+          <QueueField
+            id="count-queue"
+            label="Cola (opcional)"
+            error={errors.queue}
+            registration={form.register("queue")}
+            description="Vacía: todas las del PCC. No se combina con el rango."
+          />
+          <RangeFields
+            id="count-range"
+            start={form.register("range.start")}
+            end={form.register("range.end")}
+          />
+          <Controller
+            control={form.control}
+            name="selection"
+            render={({ field }) => (
+              <SelectionField
+                id="count-selection"
+                value={field.value ?? []}
+                onChange={field.onChange}
+                note={
+                  <>
+                    Necesita una cola: sin ella, o con rango, el SDK lanza{" "}
+                    <code>TypeError</code> sin request.
+                  </>
+                }
+              />
+            )}
           />
           <Blocked reason={disabledReason} />
           <Button
@@ -480,8 +560,13 @@ function ActivityStep({ disabledReason, journey }: PanelProps) {
   const { run, pending, execute } = useStep("queue.activity", queueActivity)
   const form = useForm<QueueActivityInput, unknown, QueueActivityOutput>({
     resolver: zodResolver(queueActivitySchema),
-    defaultValues: { pcc: journey.pcc },
+    defaultValues: {
+      pcc: journey.pcc,
+      queue: "",
+      range: { start: "", end: "" },
+    },
   })
+  const errors = form.formState.errors
   return (
     <StepPanel
       title="queue.activity"
@@ -491,7 +576,9 @@ function ActivityStep({ disabledReason, journey }: PanelProps) {
           ocho contadores de actividad de cada cola, más los totales. Lista
           también las colas vacías con algún contador. <code>numMessages</code>{" "}
           es el mismo número que el <code>count</code> de la cola. No cambia{" "}
-          <code>state</code>, y no se sabe desde cuándo cuentan (Q-097).
+          <code>state</code>, y no se sabe desde cuándo cuentan (Q-097). Con{" "}
+          <code>queue</code> o <code>range</code>, Sabre no lista lo de fuera, y
+          con <code>queue</code> no manda <code>totals</code>.
         </>
       }
       run={run}
@@ -504,8 +591,20 @@ function ActivityStep({ disabledReason, journey }: PanelProps) {
         >
           <PccField
             id="activity-pcc"
-            error={form.formState.errors.pcc}
+            error={errors.pcc}
             registration={form.register("pcc")}
+          />
+          <QueueField
+            id="activity-queue"
+            label="Cola (opcional)"
+            error={errors.queue}
+            registration={form.register("queue")}
+            description="Vacía: todas las del PCC. No se combina con el rango."
+          />
+          <RangeFields
+            id="activity-range"
+            start={form.register("range.start")}
+            end={form.register("range.end")}
           />
           <Blocked reason={disabledReason} />
           <Button
@@ -521,7 +620,6 @@ function ActivityStep({ disabledReason, journey }: PanelProps) {
 }
 
 function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
-  const { environment } = useEnvironment()
   const { run, pending, execute } = useStep("queue.list", queueList)
   const form = useForm<QueueListInput, unknown, QueueListOutput>({
     resolver: zodResolver(queueListSchema),
@@ -595,12 +693,6 @@ function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
                     En <code>list</code>, Sabre solo acepta <code>QD</code> o{" "}
                     <code>AK</code>. El campo acepta cualquier código: con otro,
                     el SDK lanza <code>TypeError</code> sin request.
-                    {environment.id === "fake" && (
-                      <>
-                        {" "}
-                        <FakeSelectionNote />
-                      </>
-                    )}
                   </>
                 }
               />
@@ -620,7 +712,6 @@ function ListStep({ disabledReason, journey, onDone, choose }: PanelProps) {
 }
 
 function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
-  const { environment } = useEnvironment()
   const { run, pending, execute } = useStep("queue.access", queueAccess)
   const form = useForm<QueueAccessInput, unknown, QueueAccessOutput>({
     resolver: zodResolver(queueAccessSchema),
@@ -668,9 +759,6 @@ function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
                 id="access-selection"
                 value={field.value ?? []}
                 onChange={field.onChange}
-                note={
-                  environment.id === "fake" ? <FakeSelectionNote /> : undefined
-                }
               />
             )}
           />
@@ -684,16 +772,6 @@ function AccessStep({ disabledReason, journey, onDone, choose }: PanelProps) {
         </form>
       }
     />
-  )
-}
-
-/** El fake no simula `selection` (sabre#202): con filtros responde un error, no los filtra. */
-function FakeSelectionNote() {
-  return (
-    <>
-      Fake: no filtra. Con filtros responde un error en vez de la cola
-      (sabre#202).
-    </>
   )
 }
 

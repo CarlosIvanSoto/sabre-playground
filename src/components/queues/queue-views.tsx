@@ -42,49 +42,97 @@ export function QueueCountView({
 }) {
   const count = result as QueueCountResponse
   if (!Array.isArray(count?.queues)) return null
+  const unfiltered = count.totals?.unfiltered
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Cola</TableHead>
-          <TableHead className="text-right">count</TableHead>
-          <TableHead />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {count.queues.map(({ queue, count: n }) => {
-          const label = formatQueueRef(queue)
-          return (
-            <TableRow key={label}>
-              <TableCell className="font-mono">{label}</TableCell>
-              <TableCell className="text-right tabular-nums">{n}</TableCell>
-              <TableCell className="text-right">
-                {typeof queue === "object" ? (
-                  // Q-086: en CERT, `list` y `access` con el `{ name }` que trae `count` dan
-                  // `INVALID QUEUE NAME FORMAT`. No se ofrece; a mano, el error sale tal cual.
-                  <span
-                    className="text-muted-foreground text-xs"
-                    title="Q-086: list y access con este nombre dan INVALID QUEUE NAME FORMAT"
-                  >
-                    con nombre: sin acceso (Q-086)
-                  </span>
-                ) : label === chosen ? (
-                  <Badge>Elegida</Badge>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onChoose(label)}
-                  >
-                    Elegir
-                  </Button>
-                )}
-              </TableCell>
-            </TableRow>
-          )
-        })}
-      </TableBody>
-    </Table>
+    <div className="flex flex-col gap-3">
+      {unfiltered !== undefined && (
+        <p className="text-muted-foreground text-xs">
+          Con <code>selection</code>: la cola tiene{" "}
+          <span className="tabular-nums">{unfiltered}</span> sin filtrar (
+          <code>totals.unfiltered</code>).
+        </p>
+      )}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Cola</TableHead>
+            <TableHead className="text-right">count</TableHead>
+            <TableHead />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {count.queues.map(({ queue, count: n }) => {
+            const label = formatQueueRef(queue)
+            return (
+              <TableRow key={label}>
+                <TableCell className="font-mono">{label}</TableCell>
+                <TableCell className="text-right tabular-nums">{n}</TableCell>
+                <TableCell className="text-right">
+                  {typeof queue === "object" ? (
+                    // Q-086: en CERT, `list` y `access` con el `{ name }` que trae `count` dan
+                    // `INVALID QUEUE NAME FORMAT`. No se ofrece; a mano, el error sale tal cual.
+                    <span
+                      className="text-muted-foreground text-xs"
+                      title="Q-086: list y access con este nombre dan INVALID QUEUE NAME FORMAT"
+                    >
+                      con nombre: sin acceso (Q-086)
+                    </span>
+                  ) : label === chosen ? (
+                    <Badge>Elegida</Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onChoose(label)}
+                    >
+                      Elegir
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+      {count.additionalInfo !== undefined &&
+        count.additionalInfo.length > 0 && (
+          <AdditionalInfo items={count.additionalInfo} />
+        )}
+    </div>
+  )
+}
+
+/**
+ * `AdditionalQueueInfo` de `count` (sabre-client 0.6.0), tal cual llega: ninguna respuesta real
+ * la trajo todavía, así que no se interpreta.
+ */
+export function AdditionalInfo({
+  items,
+}: {
+  items: NonNullable<QueueCountResponse["additionalInfo"]>
+}) {
+  return (
+    <Alert>
+      <AlertTitle>AdditionalQueueInfo</AlertTitle>
+      <AlertDescription>
+        <ul className="flex flex-col gap-1 font-mono text-xs">
+          {items.map((item) => (
+            // Sin id en Sabre: el contenido es la clave.
+            <li key={JSON.stringify(item)}>
+              {[
+                item.queue !== undefined &&
+                  `cola ${formatQueueRef(item.queue)}`,
+                item.freeText,
+                item.pseudoCityCode,
+                item.queueNumber,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </li>
+          ))}
+        </ul>
+      </AlertDescription>
+    </Alert>
   )
 }
 

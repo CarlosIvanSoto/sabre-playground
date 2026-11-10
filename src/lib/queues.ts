@@ -90,11 +90,99 @@ export const locatorList = z
  */
 const unlock = z.boolean().default(false)
 
-export const queueCountSchema = z.object({ pcc: optionalPcc })
+/** Una fila del editor de `selection`, como texto: el código y su valor. */
+export interface SelectionRow {
+  function: string
+  criteria: string
+}
+
+/**
+ * `selection` de `access` y `list` (F13.1, F13.2): la lista de filas del editor. Solo pasa a
+ * mayúsculas, quita los espacios y descarta las filas que quedaron vacías del todo. No valida
+ * códigos, valores ni cantidad: eso lo hace el SDK, y su `TypeError` (más de 8 filtros, un
+ * valor vacío o, en `list`, un código que no es `QD` ni `AK`) se ve como el error del paso.
+ * Sin filas da `undefined`: la llamada queda como sin filtro.
+ */
+export const queueSelection = z
+  .array(z.object({ function: z.string(), criteria: z.string() }))
+  .optional()
+  .transform((rows) => {
+    const selection = (rows ?? [])
+      .map((row) => ({
+        function: row.function.trim().toUpperCase(),
+        criteria: row.criteria.trim().toUpperCase(),
+      }))
+      .filter((row) => row.function !== "" || row.criteria !== "")
+    return selection.length > 0 ? selection : undefined
+  })
+
+/**
+ * La ayuda corta del editor: los códigos que más se usan al entrar a una cola, de la lista de
+ * Sabre (`wiki/sources/funciones-de-seleccion-de-colas`). Hay muchos más.
+ */
+export const SELECTION_CODES = [
+  { code: "QD", meaning: "fecha de colocación en la cola", example: "05NOV" },
+  { code: "AL", meaning: "aerolínea", example: "DL" },
+  { code: "AC", meaning: "código de acción o estado", example: "HL" },
+  { code: "PI", meaning: "código PIC", example: "11" },
+  {
+    code: "AK",
+    meaning: "agente que lo colocó (PCC + firma)",
+    example: "PCC1AAT",
+  },
+] as const
+
+/** Una cola opcional (F14.1): vacía es ninguna. Con texto, se valida como `queueRef`. */
+export const optionalQueueRef = z
+  .string()
+  .optional()
+  .transform((text, context) => {
+    if (text === undefined || text.trim() === "") return undefined
+    const ref = parseQueueRef(text)
+    if (ref === undefined) {
+      context.addIssue({ code: "custom", message: "0–511 o un nombre (S)" })
+      return z.NEVER
+    }
+    return ref
+  })
+
+/** Un extremo del rango como texto: vacío pasa como `NaN`, para que lo rechace el SDK. */
+const rangeEnd = (text: string) =>
+  text.trim() === "" ? Number.NaN : Number(text)
+
+/**
+ * `range` de `count` y `activity` (F14.1): `{ start, end }` como texto. Los dos vacíos es
+ * ninguno. No valida nada más: un extremo vacío, `start >= end` o `queue` y `range` juntos los
+ * rechaza el SDK con `TypeError`, y el paso lo muestra.
+ */
+export const optionalRange = z
+  .object({ start: z.string(), end: z.string() })
+  .optional()
+  .transform((range) => {
+    if (range === undefined) return undefined
+    if (range.start.trim() === "" && range.end.trim() === "") return undefined
+    return { start: rangeEnd(range.start), end: rangeEnd(range.end) }
+  })
+
+/**
+ * `count` (F14.1, sabre-client 0.6.0): todo el PCC, una `queue` o un `range`, y `selection`,
+ * que el SDK pide junto con `queue`. El censo usa este mismo esquema solo con `pcc`.
+ */
+export const queueCountSchema = z.object({
+  pcc: optionalPcc,
+  queue: optionalQueueRef,
+  range: optionalRange,
+  selection: queueSelection,
+})
 export type QueueCountInput = z.input<typeof queueCountSchema>
 export type QueueCountOutput = z.output<typeof queueCountSchema>
 
-export const queueActivitySchema = z.object({ pcc: optionalPcc })
+/** `activity` (F14.1): todo el PCC, una `queue` o un `range`. Sin `selection`. */
+export const queueActivitySchema = z.object({
+  pcc: optionalPcc,
+  queue: optionalQueueRef,
+  range: optionalRange,
+})
 export type QueueActivityInput = z.input<typeof queueActivitySchema>
 export type QueueActivityOutput = z.output<typeof queueActivitySchema>
 
@@ -149,48 +237,6 @@ export const ACTIVITY_COUNTERS = [
   words: readonly [string, string]
   label: string
 }[]
-
-/** Una fila del editor de `selection`, como texto: el código y su valor. */
-export interface SelectionRow {
-  function: string
-  criteria: string
-}
-
-/**
- * `selection` de `access` y `list` (F13.1, F13.2): la lista de filas del editor. Solo pasa a
- * mayúsculas, quita los espacios y descarta las filas que quedaron vacías del todo. No valida
- * códigos, valores ni cantidad: eso lo hace el SDK, y su `TypeError` (más de 8 filtros, un
- * valor vacío o, en `list`, un código que no es `QD` ni `AK`) se ve como el error del paso.
- * Sin filas da `undefined`: la llamada queda como sin filtro.
- */
-export const queueSelection = z
-  .array(z.object({ function: z.string(), criteria: z.string() }))
-  .optional()
-  .transform((rows) => {
-    const selection = (rows ?? [])
-      .map((row) => ({
-        function: row.function.trim().toUpperCase(),
-        criteria: row.criteria.trim().toUpperCase(),
-      }))
-      .filter((row) => row.function !== "" || row.criteria !== "")
-    return selection.length > 0 ? selection : undefined
-  })
-
-/**
- * La ayuda corta del editor: los códigos que más se usan al entrar a una cola, de la lista de
- * Sabre (`wiki/sources/funciones-de-seleccion-de-colas`). Hay muchos más.
- */
-export const SELECTION_CODES = [
-  { code: "QD", meaning: "fecha de colocación en la cola", example: "05NOV" },
-  { code: "AL", meaning: "aerolínea", example: "DL" },
-  { code: "AC", meaning: "código de acción o estado", example: "HL" },
-  { code: "PI", meaning: "código PIC", example: "11" },
-  {
-    code: "AK",
-    meaning: "agente que lo colocó (PCC + firma)",
-    example: "PCC1AAT",
-  },
-] as const
 
 export const queueListSchema = z.object({
   queue: queueRef,
