@@ -1,6 +1,6 @@
 ---
 name: git-flow
-description: Flujo de Git de sabre-playground guiado por issues — rama ligada a un issue, commits Conventional Commits, checks locales, push y Pull Request contra la rama de integración `v2` con la plantilla del repo. Usar cuando el usuario pida commitear, subir cambios, abrir un PR, empezar a trabajar en un issue o cerrar una tarea. Acepta como argumento el número de issue (ej. `/git-flow 5`).
+description: Flujo de Git de sabre-playground guiado por issues — rama ligada a un issue, commits Conventional Commits, checks locales, push y Pull Request contra la rama de integración `main` con la plantilla del repo. Usar cuando el usuario pida commitear, subir cambios, abrir un PR, empezar a trabajar en un issue o cerrar una tarea. Acepta como argumento el número de issue (ej. `/git-flow 5`).
 ---
 
 # Flujo de Git guiado por issues
@@ -12,17 +12,16 @@ issue; siguen la vía corta de la sección 9.
 
 ## Constantes del proyecto
 
-- **Rama de integración (base):** `v2`. Todas las ramas salen de aquí y todos los PR apuntan aquí.
-  Mientras dure la v2, `v2` es también la **rama por defecto** del repo en GitHub, para que
-  `Closes #N` cierre el issue al hacer merge.
-- **`main`** conserva la v1 (tag `v1`) hasta la tarea F7.4 (#28), en la que `v2` la reemplaza.
-  Nunca se usa como base ni recibe push durante la v2. Al cerrar #28, la base pasa a ser `main` y
-  este skill se actualiza (sección 9).
+- **Rama de integración (base):** `main`. Todas las ramas salen de aquí y todos los PR apuntan
+  aquí. Es también la **rama por defecto** del repo en GitHub, para que `Closes #N` cierre el issue
+  al hacer merge.
+- **`v2`** fue la rama de integración de la v2 hasta la tarea F7.4 (#28), en la que pasó a `main`
+  por fast-forward. Ya no se usa como base ni recibe push. La v1 quedó en el tag `v1`.
 - **Repo:** `CarlosIvanSoto/sabre-playground` · **Milestone:** `v2`.
 - **Checks locales:** `pnpm lint && pnpm test && pnpm build` (`lint` es `biome check`; `test` corre
   `node:test` sobre `src/**/*.test.ts`; el build de Next también hace el typecheck). La CI corre lo
   mismo (`pnpm biome ci`, `pnpm test` y `pnpm build`) en cada PR, en el job "biome, tests y build".
-  Ese nombre es el check exigido por la protección de `v2`: si se renombra el job, hay que cambiar
+  Ese nombre es el check exigido por la protección de `main`: si se renombra el job, hay que cambiar
   también el check exigido (con confirmación del usuario), o todos los PR quedan `BLOCKED`.
 - **Prohibido en commits y PR:** líneas `Co-Authored-By`, `Claude-Session`, "Generated with Claude"
   o cualquier atribución a IA.
@@ -40,12 +39,11 @@ Decide en qué situación estás:
 
 | Situación | Qué hacer |
 |---|---|
-| En `v2` con cambios sin commitear | Ir al paso 1 (identificar issue) y crear la rama; los cambios viajan con `git switch -c`. |
+| En `main` con cambios sin commitear | Ir al paso 1 (identificar issue) y crear la rama; los cambios viajan con `git switch -c`. |
 | En una rama de tarea | Seguir en ella; saltar al paso 3. |
-| En `main` | Detenerse: `main` es la v1. Cambiar a `v2` (los cambios viajan con `git switch`) y avisar al usuario. |
+| En `v2` | Detenerse: `v2` quedó congelada en F7.4 (#28). Cambiar a `main` (los cambios viajan con `git switch`) y avisar al usuario. |
 | Cambios que mezclan varias tareas | Separarlos: solo entra a la rama lo que pertenece al issue. Lo demás se queda sin commitear y se avisa al usuario. |
 | Solo cambian archivos de proceso (ver sección 9) | Ir a la sección 9; no hace falta issue. |
-| `origin/v2` no existe | Ir a la sección 10 (arranque). |
 
 ## 1. Identificar el issue
 
@@ -76,11 +74,11 @@ Formato: `<tipo>/<issue>-<slug-kebab-case>` (slug corto, 2–5 palabras, sin ace
 Ejemplos: `feat/4-run-step`, `feat/5-step-panel`, `chore/2-config-entornos`.
 
 ```bash
-git switch v2 && git pull --ff-only   # solo si no hay cambios pendientes
+git switch main && git pull --ff-only   # solo si no hay cambios pendientes
 git switch -c feat/4-run-step
 ```
 
-Si ya hay cambios sin commitear en `v2`, crear la rama directamente con `git switch -c` (no hacer
+Si ya hay cambios sin commitear en `main`, crear la rama directamente con `git switch -c` (no hacer
 pull antes).
 
 ## 3. Commits
@@ -150,7 +148,7 @@ anotar qué queda pendiente.
 Antes de cualquier acción remota, mostrar un resumen corto y esperar el visto bueno:
 
 - rama y base
-- lista de commits (`git log --oneline v2..HEAD`)
+- lista de commits (`git log --oneline main..HEAD`)
 - resultado de los checks y de las pruebas manuales
 - título del PR propuesto
 
@@ -160,7 +158,7 @@ Antes de cualquier acción remota, mostrar un resumen corto y esperar el visto b
 git push -u origin <rama>
 ```
 
-- Nunca hacer push directo a `v2` ni a `main`.
+- Nunca hacer push directo a `main` ni a `v2`.
 - Si hay que reescribir la rama ya subida (rebase sobre la base), usar solo
   `git push --force-with-lease`, nunca `--force`.
 
@@ -171,7 +169,7 @@ Título = el mensaje del futuro squash commit, en Conventional Commits con el c�
 
 ```bash
 gh pr create \
-  --base v2 \
+  --base main \
   --head <rama> \
   --title "<tipo>(<scope>): <resumen> [Fx.y]" \
   --milestone v2 \
@@ -184,7 +182,7 @@ El cuerpo sigue `.github/pull_request_template.md` y se llena de verdad:
 
 - `Closes #N` en la primera línea. Comprobar que quedó enlazado:
   `gh pr view <PR> --json closingIssuesReferences`. Si sale vacío, revisar la palabra clave y que
-  `v2` sea la rama por defecto del repo (`gh repo view --json defaultBranchRef`); si no lo es, el
+  `main` sea la rama por defecto del repo (`gh repo view --json defaultBranchRef`); si no lo es, el
   issue se cierra a mano después del merge (paso 8).
 - **Resumen:** qué problema resuelve, en 2–3 frases.
 - **Cambios:** lista de lo que cambia, agrupada por parte de la app.
@@ -199,18 +197,18 @@ Al terminar, devolver al usuario la URL del PR.
 
 ## 8. Merge y limpieza (cuando el usuario lo pida)
 
-Estrategia: **squash merge** → un commit por issue en `v2`, con el título del PR como mensaje.
+Estrategia: **squash merge** → un commit por issue en `main`, con el título del PR como mensaje.
 
 Antes del merge, esperar a que la CI termine en verde:
 
 ```bash
 gh pr checks <PR> --watch
 gh pr merge <PR> --squash --delete-branch
-git switch v2 && git pull --ff-only
+git switch main && git pull --ff-only
 git branch -D <rama>               # -D: Git no reconoce como mergeada una rama que entró por squash
 ```
 
-Si la base avanzó mientras el PR estaba abierto: `git fetch origin && git rebase origin/v2`,
+Si la base avanzó mientras el PR estaba abierto: `git fetch origin && git rebase origin/main`,
 repetir checks y `git push --force-with-lease`.
 
 **PR apilados** (una rama sale de la de otra tarea y su PR apunta a esa rama). Primero ver si
@@ -227,12 +225,12 @@ GitHub los tiene en un stack nativo: `gh api repos/CarlosIvanSoto/sabre-playgrou
   gh api repos/CarlosIvanSoto/sabre-playground/pulls/<PR>/merge-async/<uuid>   # hasta "merged"
   ```
 
-  GitHub cambia la base del siguiente PR a `v2` y rebasa solo las ramas de arriba; el PR queda
+  GitHub cambia la base del siguiente PR a `main` y rebasa solo las ramas de arriba; el PR queda
   `BLOCKED` hasta que termina la CI de ese push. Las ramas no se borran hasta mergear el último.
 - **Sin stack:** no usar `--delete-branch` en el PR de abajo, porque GitHub cierra el de arriba en
-  vez de cambiarle la base. Mergear, `gh pr edit <PR-de-arriba> --base v2`, y sacar los commits
+  vez de cambiarle la base. Mergear, `gh pr edit <PR-de-arriba> --base main`, y sacar los commits
   originales del de abajo:
-  `git rebase --onto origin/v2 <rama-de-abajo> <rama-de-arriba>`, con `--update-refs` si hay más
+  `git rebase --onto origin/main <rama-de-abajo> <rama-de-arriba>`, con `--update-refs` si hay más
   ramas encima, repetir checks y `git push --force-with-lease` (con confirmación del usuario).
   Recién entonces borrar la rama de abajo.
 
@@ -263,35 +261,33 @@ los pasos 1–8.
 
 **Cómo:**
 
-1. Rama `chore/proceso-<slug>` desde `v2`, por ejemplo `chore/proceso-checks-locales`. No se
+1. Rama `chore/proceso-<slug>` desde `main`, por ejemplo `chore/proceso-checks-locales`. No se
    mezclan con una rama de tarea: si aparecen en medio de una tarea, se quedan sin commitear y se
    llevan a su propia rama.
 2. Commit `chore(proceso): <resumen>`, con el cuerpo explicando el porqué y sin footer `Refs`.
 3. Los checks del paso 4 no hacen falta (no se toca código).
-4. Confirmar con el usuario (paso 5), push (paso 6) y PR contra `v2` con título
+4. Confirmar con el usuario (paso 5), push (paso 6) y PR contra `main` con título
    `chore(proceso): <resumen>`, sin código de tarea `[Fx.y]`, sin milestone ni etiquetas de fase.
    El cuerpo puede ser corto: qué cambia y por qué. Las secciones de la plantilla que no apliquen
    se marcan "No aplica".
 5. Squash merge. No hay issue que cerrar.
 
-## 10. Arranque de la rama de integración (una sola vez)
+## 10. Movimientos de rama hechos una sola vez (historial)
 
-`v2` se creó en local desde `main` con la tarea F0.1 (#1), que es justamente la que la crea. Por eso
-el #1 y la configuración inicial del proceso no pasan por PR:
+No se vuelven a usar; quedan como registro de las dos veces en que se tocó una rama protegida sin PR.
 
-1. Comprobar que `v2` tiene encima de `main` solo el commit de #1 y el de proceso
-   (`git log --oneline main..v2`), y que los checks del paso 4 pasan.
-2. Con confirmación del usuario: `git push -u origin v2`.
-3. Con confirmación del usuario, hacer de `v2` la rama por defecto:
-   `gh repo edit CarlosIvanSoto/sabre-playground --default-branch v2`.
-4. Cerrar #1 a mano: `gh issue close 1 --comment "Hecho en <sha> al crear v2 (arranque, sin PR)."`.
-5. Desde ahí, todo sigue los pasos 1–8. Esta sección no se vuelve a usar.
+- **Arranque de `v2` (F0.1, #1).** `v2` se creó en local desde `main`, con el commit de #1 y el de
+  proceso encima. Se subió con `git push -u origin v2`, pasó a ser la rama por defecto y #1 se cerró
+  a mano.
+- **`v2` reemplaza a `main` (F7.4, #28).** Primero, un PR contra `v2` que cambió la base en este
+  skill, en `CLAUDE.md` y en la CI. Después, `git push origin v2:main`, un fast-forward porque
+  `main` era ancestro de `v2`. `main` volvió a ser la rama por defecto, con la misma protección que
+  tenía `v2`. La v1 sigue en el tag `v1`.
 
 ## Reglas que no se rompen
 
-- Nada de commits sin issue asociado, salvo los ajustes de proceso (sección 9) y el arranque
-  (sección 10).
-- Nada de push directo a `v2` o `main`; todo entra por PR (salvo el arranque).
+- Nada de commits sin issue asociado, salvo los ajustes de proceso (sección 9).
+- Nada de push directo a `main` ni a `v2`; todo entra por PR.
 - Nada de `--force` (solo `--force-with-lease`, y solo en ramas propias).
 - Nada de `--no-verify` para saltarse hooks.
 - Nada de `git stash` sin etiqueta. Para apartar trabajo, usar un commit WIP en la rama.
