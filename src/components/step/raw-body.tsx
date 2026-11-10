@@ -16,7 +16,12 @@ import {
 } from "@/components/ui/code-block"
 import { useHighlightedCode } from "@/hooks/use-highlighted-code"
 import { formatXml } from "@/lib/format-xml"
-import type { RawResponse } from "@/lib/step/types"
+
+/** Lo que hace falta para mostrar un body crudo: el de la respuesta o el del request. */
+interface RawText {
+  protocol: string
+  body: string
+}
 
 type Format = "xml" | "json" | "text"
 
@@ -24,7 +29,7 @@ type Format = "xml" | "json" | "text"
 const HIGHLIGHT_LIMIT = 200_000
 
 /** El formato del body: SOAP y lo que empiece con `<` es XML; lo que se parsee, JSON. */
-function detect(raw: RawResponse): { format: Format; pretty: string } {
+function detect(raw: RawText): { format: Format; pretty: string } {
   const body = raw.body.trim()
   if (raw.protocol === "soap" || body.startsWith("<")) {
     return { format: "xml", pretty: formatXml(body) }
@@ -48,17 +53,25 @@ const MEDIA_TYPE: Record<Format, string> = {
 }
 
 /**
- * El body de la respuesta cruda, con formato: el JSON como árbol colapsable y el XML con
+ * Un body crudo (respuesta o request), con formato: el JSON como árbol colapsable y el XML con
  * sangría y resaltado. "Tal cual" muestra el texto como llegó. Copiar y descargar siempre
  * usan ese texto original, para que sirva de fixture.
  *
  * `name` es la base del archivo (p. ej. `queue.count`): se descarga como
- * `<name>.raw.<xml|json|txt>`.
+ * `<name>.<suffix>.<xml|json|txt>`, con `suffix` `raw` (la respuesta) o `request`.
  */
-export function RawBody({ raw, name }: { raw: RawResponse; name: string }) {
+export function RawBody({
+  raw,
+  name,
+  suffix = "raw",
+}: {
+  raw: RawText
+  name: string
+  suffix?: "raw" | "request"
+}) {
   const { format, pretty } = detect(raw)
   const [asIs, setAsIs] = useState(false)
-  const filename = `${name}.raw.${EXTENSION[format]}`
+  const filename = `${name}.${suffix}.${EXTENSION[format]}`
 
   const asIsToggle =
     format === "text" ? null : (

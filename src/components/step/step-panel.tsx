@@ -36,6 +36,7 @@ import type { ConsoleEnvironmentId } from "@/lib/environment"
 import { fileBase } from "@/lib/step/file-name"
 import type {
   LogLine,
+  RawRequest,
   RawResponse,
   StepError,
   StepResult,
@@ -237,14 +238,7 @@ function StepTabs({
           )}
         </TabsContent>
         <TabsContent value="raw">
-          {step.raw === undefined ? (
-            <Nothing>
-              Sin respuesta HTTP: la llamada no llegó a Sabre, o fue solo de
-              token.
-            </Nothing>
-          ) : (
-            <RawView raw={step.raw} name={name} />
-          )}
+          <RawTabs step={step} name={name} />
         </TabsContent>
         <TabsContent value="error">
           {issues === 0 ? (
@@ -312,6 +306,95 @@ function StepSummary({
         <span className="text-muted-foreground">
           {step.attempts} {step.attempts === 1 ? "intento" : "intentos"}
         </span>
+      )}
+    </div>
+  )
+}
+
+type RawTab = "response" | "request"
+
+/**
+ * La pestaña Crudo: la respuesta y el request que mandó el SDK (ADR-029), uno al lado del
+ * otro. Abre en la respuesta; si no hubo respuesta HTTP pero sí request (fallo de red), en el
+ * request.
+ */
+function RawTabs({ step, name }: { step: StepResult; name: string }) {
+  const initial: RawTab =
+    step.raw === undefined && step.rawRequest !== undefined
+      ? "request"
+      : "response"
+  const [tab, setTab] = useState<RawTab>(initial)
+  const [shown, setShown] = useState(step)
+  if (shown !== step) {
+    setShown(step)
+    setTab(initial)
+  }
+
+  return (
+    <Tabs value={tab} onValueChange={(value) => setTab(value as RawTab)}>
+      <TabsList variant="line">
+        <TabsTrigger value="response">Respuesta</TabsTrigger>
+        <TabsTrigger value="request">Request</TabsTrigger>
+      </TabsList>
+      <TabsContent value="response">
+        {step.raw === undefined ? (
+          <Nothing>
+            Sin respuesta HTTP: la llamada no llegó a Sabre, o fue solo de
+            token.
+          </Nothing>
+        ) : (
+          <RawView raw={step.raw} name={name} />
+        )}
+      </TabsContent>
+      <TabsContent value="request">
+        {step.rawRequest === undefined ? (
+          <Nothing>
+            Sin request crudo: la llamada no llegó a mandarse, o fue de auth
+            (OAuth, SessionCreateRQ o SessionCloseRQ), que el SDK no entrega.
+          </Nothing>
+        ) : (
+          <RequestView request={step.rawRequest} name={name} />
+        )}
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+/** El request crudo: sin `Authorization` y, en SOAP, con el token tapado por el SDK. */
+function RequestView({ request, name }: { request: RawRequest; name: string }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="font-mono">
+          {request.operation}
+        </Badge>
+        <Badge variant="outline" className="uppercase">
+          {request.protocol}
+        </Badge>
+        <Badge variant="secondary" className="font-mono">
+          {request.method}
+        </Badge>
+        <span className="text-muted-foreground text-sm">
+          {request.attempts} {request.attempts === 1 ? "intento" : "intentos"}
+          {request.attempts > 1 && " (se muestra el último)"}
+        </span>
+      </div>
+      <Fields
+        rows={[
+          ["url", request.url],
+          ...Object.entries(request.headers).map(
+            ([name, value]): [string, string] => [name, value]
+          ),
+        ]}
+      />
+      {request.body === undefined || request.body === "" ? (
+        <Nothing>Sin body.</Nothing>
+      ) : (
+        <RawBody
+          raw={{ protocol: request.protocol, body: request.body }}
+          name={name}
+          suffix="request"
+        />
       )}
     </div>
   )
