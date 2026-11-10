@@ -4,7 +4,7 @@ import { ExternalLink, RotateCwIcon } from "lucide-react"
 import Link from "next/link"
 import { type ReactNode, useEffect, useReducer, useState } from "react"
 import type { QueueItem } from "sabre-client"
-import { getBooking } from "@/app/(console)/booking/actions"
+import { getBooking, reservationHistory } from "@/app/(console)/booking/actions"
 import {
   queueAccess,
   queueActivity,
@@ -95,6 +95,9 @@ function Desk({ initialPcc }: { initialPcc: string }) {
   const placeStep = useStep("queue.place", queuePlace)
   const removeStep = useStep("queue.remove", queueRemove)
   const bookingStep = useStep("booking.get", getBooking)
+  const historyStep = useStep("reservation.history", reservationHistory)
+  // De qué localizador es el último historial: la hoja solo lo muestra para el suyo.
+  const [historyOf, setHistoryOf] = useState<string>()
   const moving =
     accessStep.pending ||
     ignoreStep.pending ||
@@ -252,6 +255,33 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       targetPcc: desk.pcc,
     })
   }
+  /**
+   * El historial (F12.3), solo para el PNR en pantalla: dentro de una cola, el de otro PNR da
+   * `NAK6` (Q-102). Fuera de una cola, el de la hoja abierta. Corre en la sesión SOAP, así
+   * que también en fake.
+   */
+  const historyReason = (locator: string | undefined) =>
+    place === "closed"
+      ? disabledReason(place, "count")
+      : locator === undefined
+        ? "Sin PNR en pantalla."
+        : inside && locator !== desk.journey.current
+          ? "Dentro de una cola, solo el PNR en pantalla: otro da NAK6 (Q-102)."
+          : undefined
+  const runHistory = (locator: string) => {
+    setHistoryOf(locator)
+    historyStep.execute({ locator })
+  }
+  /** "Historial": abre la hoja con el PNR en pantalla y pide su historial. */
+  const openHistory = () => {
+    const locator = desk.journey.current
+    if (locator === undefined) return
+    if (environment.id === "fake") dispatch({ type: "booking", locator })
+    else if (desk.booking !== locator || bookingStep.run === undefined) {
+      openBooking()
+    }
+    runHistory(locator)
+  }
   const removeControl = (
     <RemoveControl
       locator={desk.journey.current}
@@ -387,6 +417,14 @@ function Desk({ initialPcc }: { initialPcc: string }) {
                 pending={bookingStep.pending}
                 onClick={openBooking}
               />
+              <ActionButton
+                label="Historial"
+                method="reservation.history"
+                variant="outline"
+                reason={historyReason(desk.journey.current)}
+                pending={historyStep.pending}
+                onClick={openHistory}
+              />
               {bookingReason === undefined ? (
                 <Link
                   href={bookingHref(desk.journey.current ?? "", desk.pcc)}
@@ -433,8 +471,20 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       <BookingSheet
         locator={desk.booking}
         pcc={desk.pcc}
-        run={bookingStep.run}
+        run={
+          environment.id === "fake"
+            ? { enabled: false, reason: `Ver reserva: ${FAKE_REST_REASON}.` }
+            : bookingStep.run
+        }
         pending={bookingStep.pending}
+        history={{
+          run: historyOf === desk.booking ? historyStep.run : undefined,
+          pending: historyStep.pending && historyOf === desk.booking,
+          reason: historyReason(desk.booking),
+          onRun: () => {
+            if (desk.booking !== undefined) runHistory(desk.booking)
+          },
+        }}
         onClose={() => dispatch({ type: "booking" })}
         removeFromQueue={
           inside && desk.booking === desk.journey.current
