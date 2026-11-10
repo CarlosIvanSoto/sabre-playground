@@ -1,12 +1,18 @@
 import "server-only"
 
-import type { SabreRawResponse, SabreRawResponseCallback } from "sabre-client"
+import type {
+  SabreRawRequest,
+  SabreRawRequestCallback,
+  SabreRawResponse,
+  SabreRawResponseCallback,
+} from "sabre-client"
 import type { LogLine, StepError, StepResult } from "@/lib/step/types"
 import { isSabreError } from "@/server/sabre/errors"
 import { captureLog } from "@/server/sabre/log"
 
 export type {
   LogLine,
+  RawRequest,
   RawResponse,
   StepError,
   StepResult,
@@ -14,6 +20,7 @@ export type {
 } from "@/lib/step/types"
 
 export interface StepOptions {
+  onRawRequest: SabreRawRequestCallback
   onRawResponse: SabreRawResponseCallback
 }
 
@@ -43,7 +50,7 @@ function nonEmptyList(value: unknown, key: string): unknown[] | undefined {
 
 /**
  * Corre una llamada del SDK y junta todo lo que hace falta para mostrarla: el resultado
- * tipado, la respuesta cruda, el error y el log. Nunca lanza.
+ * tipado, el request y la respuesta crudos, el error y el log. Nunca lanza.
  *
  * `call` recibe las opciones que tiene que pasarle al método del SDK:
  *
@@ -56,6 +63,12 @@ export async function runStep<T>(
 ): Promise<StepResult<T>> {
   const log: LogLine[] = []
   let raw: SabreRawResponse | undefined
+  let sent: SabreRawRequest | undefined
+  // El SDK lo llama una vez por operación, con el último intento (ADR-029). Si este callback
+  // lanzara, el SDK emite `sabre.request.rawRequestHookFailed` y el paso sigue.
+  const onRawRequest: SabreRawRequestCallback = (request) => {
+    sent = request
+  }
   const onRawResponse: SabreRawResponseCallback = (response) => {
     raw = response
   }
@@ -64,13 +77,14 @@ export async function runStep<T>(
   let result: T | undefined
   let error: StepError | undefined
   try {
-    result = await captureLog(log, () => call({ onRawResponse }))
+    result = await captureLog(log, () => call({ onRawRequest, onRawResponse }))
   } catch (thrown) {
     error = serializeError(thrown)
   }
   const durationMs = Math.round(performance.now() - startedAt)
 
   const captured: SabreRawResponse | undefined = raw
+  const request: SabreRawRequest | undefined = sent
   const plain = toPlain(result)
   return {
     ok: error === undefined,
@@ -84,9 +98,16 @@ export async function runStep<T>(
             ...captured,
             headers: Object.fromEntries(captured.headers.entries()),
           },
+    rawRequest:
+      request === undefined
+        ? undefined
+        : {
+            ...request,
+            headers: Object.fromEntries(request.headers.entries()),
+          },
     error,
     log: toPlain(log),
     durationMs,
-    attempts: captured?.attempts,
+    attempts: captured?.attempts ?? request?.attempts,
   }
 }

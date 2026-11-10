@@ -12,6 +12,7 @@ import {
 import {
   fakeQueues,
   queueAccess,
+  queueActivity,
   queueCount,
   queueExit,
   queueIgnore,
@@ -22,7 +23,11 @@ import {
   resetFakeQueues,
 } from "@/app/(console)/queues/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
-import { QueueCountView, QueueStepView } from "@/components/queues/queue-views"
+import {
+  QueueActivityView,
+  QueueCountView,
+  QueueStepView,
+} from "@/components/queues/queue-views"
 import { SessionBar } from "@/components/session/session-bar"
 import { CloseStep, OpenStep } from "@/components/session/session-flow"
 import { useSessionStatus } from "@/components/session/use-session-status"
@@ -70,6 +75,8 @@ import {
   PROCESS_ACTIONS,
   type QueueAccessInput,
   type QueueAccessOutput,
+  type QueueActivityInput,
+  type QueueActivityOutput,
   type QueueCountInput,
   type QueueCountOutput,
   type QueueListInput,
@@ -81,6 +88,7 @@ import {
   type QueueRemoveInput,
   type QueueRemoveOutput,
   queueAccessSchema,
+  queueActivitySchema,
   queueCountSchema,
   queueListSchema,
   queuePlaceSchema,
@@ -90,7 +98,7 @@ import {
 import type { StepRun } from "@/lib/step/types"
 
 /**
- * Flujo 6: colas, dentro de la sesión registrada del navegador. count → list → access →
+ * Flujo 6: colas, dentro de la sesión registrada del navegador. count (y activity) → list → access →
  * ignore / remove / place → exit, y el recorrido con `process`.
  *
  * Como el flujo 2, lo que un paso le pasa al siguiente vive en un reducer en memoria del
@@ -173,6 +181,7 @@ export function QueuesFlow({
         {...props("count")}
         onChoose={(queue) => choose(queue, journey.pcc)}
       />
+      <ActivityStep key={`activity-${g.activity}`} {...props("activity")} />
       <ListStep key={`list-${g.list}`} {...props("list")} />
       <AccessStep key={`access-${g.access}`} {...props("access")} />
       <IgnoreStep key={`ignore-${g.ignore}`} {...props("ignore")} />
@@ -212,7 +221,8 @@ function FakeQueuesStep({ open }: { open: boolean }) {
           <code>queueFixtures</code> (respuestas anonimizadas de producción). La
           cola 9 tiene los 4 PNR de <code>walk</code>, la 50 está vacía y{" "}
           <code>AAAAAE</code> y <code>AAAAAF</code> quedan fuera de las colas,
-          para <code>place</code>.
+          para <code>place</code>. En <code>queue.activity</code>, la 9 trae 27
+          ignorados sembrados; las acciones del fake no cambian los contadores.
         </>
       }
       run={latest}
@@ -457,6 +467,51 @@ function CountStep({
             disabled={pending || disabledReason !== undefined}
           >
             Contar
+          </Button>
+        </form>
+      }
+    />
+  )
+}
+
+/** `QueueAnalysisLLSRQ` (F12.2): solo lectura, no mueve el cursor ni cambia `state`. */
+function ActivityStep({ disabledReason, journey }: PanelProps) {
+  const { run, pending, execute } = useStep("queue.activity", queueActivity)
+  const form = useForm<QueueActivityInput, unknown, QueueActivityOutput>({
+    resolver: zodResolver(queueActivitySchema),
+    defaultValues: { pcc: journey.pcc },
+  })
+  return (
+    <StepPanel
+      title="queue.activity"
+      description={
+        <>
+          <code>QueueAnalysisLLSRQ</code> (el <code>QA</code> del host): los
+          ocho contadores de actividad de cada cola, más los totales. Lista
+          también las colas vacías con algún contador. <code>numMessages</code>{" "}
+          es el mismo número que el <code>count</code> de la cola. No cambia{" "}
+          <code>state</code>, y no se sabe desde cuándo cuentan (Q-097).
+        </>
+      }
+      run={run}
+      pending={pending}
+      resultView={(result) => <QueueActivityView result={result} />}
+      form={
+        <form
+          onSubmit={form.handleSubmit(() => execute(form.getValues()))}
+          className="flex flex-col gap-4"
+        >
+          <PccField
+            id="activity-pcc"
+            error={form.formState.errors.pcc}
+            registration={form.register("pcc")}
+          />
+          <Blocked reason={disabledReason} />
+          <Button
+            type="submit"
+            disabled={pending || disabledReason !== undefined}
+          >
+            Ver actividad
           </Button>
         </form>
       }
