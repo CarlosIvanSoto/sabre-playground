@@ -27,6 +27,8 @@ import { useSessionStatus } from "@/components/session/use-session-status"
 import { useStep } from "@/components/step/use-step"
 import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { FAKE_REST_REASON } from "@/lib/flows"
 import {
   bookingHref,
@@ -74,6 +76,9 @@ function Desk({ initialPcc }: { initialPcc: string }) {
   // o al cambiar de entorno (la mesa se vuelve a montar).
   const [unlocked, setUnlocked] = useState(false)
   const [legendOpen, setLegendOpen] = useState(false)
+  // F13.3: `queue.activity` solo con el check «Actividad», apagado por defecto. Con él
+  // apagado, ⟳ hace un solo request (`count`).
+  const [withActivity, setWithActivity] = useState(false)
   // Las llamadas del historial desde aquí son de la mesa: la barra de actividad solo muestra
   // esas.
   const [since] = useState(() => new Date().toISOString())
@@ -172,19 +177,26 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       void refresh()
     }
 
-  // `activity` va después de `count`, no en paralelo: es la misma sesión SOAP. Sus contadores
-  // se muestran al lado del conteo (F12.2).
-  const countIn = (pcc: string) =>
+  const activityIn = (pcc: string) =>
+    activityStep.execute({ pcc }, (activity) =>
+      dispatch({ type: "activity", pcc, run: activity })
+    )
+  // Con el check «Actividad», `activity` va después de `count`, no en paralelo: es la misma
+  // sesión SOAP. Sin él, ⟳ es solo `count` (F13.3).
+  const countIn = (pcc: string, activity = withActivity) =>
     countStep.execute({ pcc }, (run) => {
       dispatch({ type: "counted", pcc, run })
       void refresh()
-      if (run.enabled && run.step.ok) {
-        activityStep.execute({ pcc }, (activity) =>
-          dispatch({ type: "activity", pcc, run: activity })
-        )
-      }
+      if (activity && run.enabled && run.step.ok) activityIn(pcc)
     })
   const count = () => countIn(desk.pcc)
+  /** Prender el check pide la actividad ya, si hay conteo; apagarlo solo la oculta. */
+  const toggleActivity = (checked: boolean) => {
+    setWithActivity(checked)
+    if (!checked || reason("count") !== undefined) return
+    if (desk.count === undefined) countIn(desk.pcc, true)
+    else activityIn(desk.pcc)
+  }
 
   /** Cambiar el PCC de trabajo: `exit` antes si el cursor está en una cola, y contar de nuevo. */
   const changePcc = (pcc: string) => {
@@ -314,26 +326,39 @@ function Desk({ initialPcc }: { initialPcc: string }) {
           title={desk.pcc === "" ? "Colas" : `Colas · ${desk.pcc}`}
           scroll
           actions={
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Volver a contar (queue.count)"
-              title={reason("count") ?? "Volver a contar (queue.count)"}
-              disabled={
-                countStep.pending ||
-                activityStep.pending ||
-                reason("count") !== undefined
-              }
-              onClick={count}
-            >
-              <RotateCwIcon
-                className={
-                  countStep.pending || activityStep.pending
-                    ? "animate-spin"
-                    : ""
+            <div className="flex items-center gap-2">
+              <Label
+                className="text-muted-foreground text-xs font-normal"
+                title="queue.activity (QueueAnalysisLLSRQ) después de cada ⟳"
+              >
+                <Checkbox
+                  checked={withActivity}
+                  disabled={countStep.pending || activityStep.pending}
+                  onCheckedChange={toggleActivity}
+                />
+                Actividad
+              </Label>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label="Volver a contar (queue.count)"
+                title={reason("count") ?? "Volver a contar (queue.count)"}
+                disabled={
+                  countStep.pending ||
+                  activityStep.pending ||
+                  reason("count") !== undefined
                 }
-              />
-            </Button>
+                onClick={count}
+              >
+                <RotateCwIcon
+                  className={
+                    countStep.pending || activityStep.pending
+                      ? "animate-spin"
+                      : ""
+                  }
+                />
+              </Button>
+            </div>
           }
         >
           <div className="flex flex-col gap-3">
@@ -347,8 +372,8 @@ function Desk({ initialPcc }: { initialPcc: string }) {
             <DeskQueues
               count={desk.count}
               failure={desk.countFailure}
-              activity={desk.activity}
-              activityFailure={desk.activityFailure}
+              activity={withActivity ? desk.activity : undefined}
+              activityFailure={withActivity ? desk.activityFailure : undefined}
               active={inside ? desk.journey.queue : undefined}
               disabledReason={enterReason}
               pending={moving}
