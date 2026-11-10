@@ -18,6 +18,10 @@ import {
  * - Fuera de las colas: los PNR de `place` (`AAAAAE`–`AAAAAF`), para colocarlos con
  *   `place({ locators })`.
  *
+ * - Actividad (`queue.activity`, F12.2): la `9` con 27 ignorados, para que no todo dé 0. El
+ *   fake no cambia los contadores con sus acciones, y `numMessages` sale de lo que hay en la
+ *   cola (no se siembra).
+ *
  * Desde la 0.5.0 cada fixture tiene sus propios alias y las firmas conservan su forma
  * (`… AAAAAA H`), así que los PNR se juntan tal cual. El pasajero principal de `list` es el
  * sintético de estrategia-de-testing: `TEST/PASSENGER`.
@@ -38,6 +42,7 @@ export function fakeQueueOptions(): QueueFakeOptions {
       [FAKE_EMPTY_QUEUE]: [],
     },
     pnrs: withPassenger(queueFakePnrs(queueFixtures.place)),
+    activity: { [FAKE_QUEUE]: { ignored: 27 } },
   }
 }
 

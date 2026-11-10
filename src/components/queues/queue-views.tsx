@@ -2,6 +2,7 @@
 
 import { Flag, MessageSquareText } from "lucide-react"
 import type {
+  QueueActivityResponse,
   QueueCountResponse,
   QueuePlaceResult,
   QueueStep,
@@ -17,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { formatQueueRef } from "@/lib/queues"
+import { ACTIVITY_COUNTERS, formatQueueRef } from "@/lib/queues"
 
 /**
  * Vistas del resultado de las colas, sobre el JSON de la pestaña Resultado. Muestran los
@@ -84,6 +85,77 @@ export function QueueCountView({
         })}
       </TableBody>
     </Table>
+  )
+}
+
+/**
+ * `activity`: los ocho contadores por cola, más `totals` y `analyzedAt`, tal cual llegan. Sabre
+ * lista también las colas vacías que tienen algún contador. No se interpretan (Q-097).
+ */
+export function QueueActivityView({ result }: { result: unknown }) {
+  const activity = result as QueueActivityResponse
+  if (!Array.isArray(activity?.queues)) return null
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-muted-foreground text-xs">
+        Nadie sabe desde cuándo cuentan (Q-097): se muestran sin interpretar.
+        {activity.analyzedAt !== undefined && (
+          <>
+            {" "}
+            Analizado a las <code>{activity.analyzedAt}</code> (hora del host,
+            sin año).
+          </>
+        )}
+      </p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Cola</TableHead>
+            {ACTIVITY_COUNTERS.map(({ key, label }) => (
+              <TableHead
+                key={key}
+                className="text-right font-mono text-xs"
+                title={label}
+              >
+                {key}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {activity.queues.map((row) => {
+            const label = formatQueueRef(row.queue)
+            return (
+              <TableRow key={label}>
+                <TableCell className="font-mono">{label}</TableCell>
+                {ACTIVITY_COUNTERS.map(({ key }) => (
+                  <TableCell
+                    key={key}
+                    className={
+                      row[key] === 0
+                        ? "text-muted-foreground text-right tabular-nums"
+                        : "text-right tabular-nums"
+                    }
+                  >
+                    {row[key]}
+                  </TableCell>
+                ))}
+              </TableRow>
+            )
+          })}
+          {activity.totals !== undefined && (
+            <TableRow className="font-medium">
+              <TableCell>totals</TableCell>
+              {ACTIVITY_COUNTERS.map(({ key }) => (
+                <TableCell key={key} className="text-right tabular-nums">
+                  {activity.totals?.[key]}
+                </TableCell>
+              ))}
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 

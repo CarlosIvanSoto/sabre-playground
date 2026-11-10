@@ -17,6 +17,7 @@ import type { StepRun } from "@/lib/step/types"
 
 export const QUEUE_PANELS = [
   "count",
+  "activity",
   "list",
   "access",
   "ignore",
@@ -200,8 +201,8 @@ export type SessionPlace = "closed" | QueueState
 
 /**
  * Qué paneles se pueden correr según dónde está la sesión, con las reglas del SDK:
- * - `outside`: count, list, access, process y place (con `locators` o el PNR del AAA).
- * - `inside`: count, list, ignore, remove, place (el PNR actual) y exit.
+ * - `outside`: count, activity, list, access, process y place (con `locators` o el PNR del AAA).
+ * - `inside`: count, activity, list, ignore, remove, place (el PNR actual) y exit.
  * - `unknown`: solo exit (tolera `CANNOT DO THIS IF OFF QUEUE`).
  * - sin sesión: ninguno.
  */
@@ -210,9 +211,24 @@ export function stepsFor(place: SessionPlace): ReadonlySet<QueuePanel> {
     case "closed":
       return new Set()
     case "outside":
-      return new Set(["count", "list", "access", "process", "place"])
+      return new Set([
+        "count",
+        "activity",
+        "list",
+        "access",
+        "process",
+        "place",
+      ])
     case "inside":
-      return new Set(["count", "list", "ignore", "remove", "place", "exit"])
+      return new Set([
+        "count",
+        "activity",
+        "list",
+        "ignore",
+        "remove",
+        "place",
+        "exit",
+      ])
     case "unknown":
       return new Set(["exit"])
   }
