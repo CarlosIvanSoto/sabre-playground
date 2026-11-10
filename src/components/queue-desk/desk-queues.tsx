@@ -2,12 +2,25 @@
 
 import { useState } from "react"
 import type { QueueActivityCounters } from "sabre-client"
+import { AdditionalInfo } from "@/components/queues/queue-views"
+import { SelectionField } from "@/components/queues/selection-field"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { type DeskActivity, type DeskCount, workingPcc } from "@/lib/queue-desk"
-import { ACTIVITY_COUNTERS, PCC_PATTERN, parseQueueRef } from "@/lib/queues"
+import {
+  type DeskActivity,
+  type DeskCount,
+  type DeskFilter,
+  type DeskFilterScope,
+  workingPcc,
+} from "@/lib/queue-desk"
+import {
+  ACTIVITY_COUNTERS,
+  PCC_PATTERN,
+  parseQueueRef,
+  type SelectionRow,
+} from "@/lib/queues"
 import { cn } from "@/lib/utils"
 
 /** Una fila de la lista: una cola del conteo. */
@@ -44,6 +57,10 @@ const hostTime = (text: string) => text.replace("T", " ")
  * `activity` van en un bloque aparte, no en la lista: no tienen PNR. No se interpreta: nadie
  * sabe desde cuándo cuenta (Q-097).
  *
+ * Con el filtro de la mesa (F14.1), cada cola contada con `selection` muestra su cuenta
+ * filtrada al lado de la de ahora (`3 / 12`), y el error de su `count`, si falló. «Actividad de
+ * la cola» deja los contadores de esa cola debajo de su fila aunque el check esté apagado.
+ *
  * Un clic en una cola numérica o en la S (mensajes) entra a ella; las colas con nombre se ven
  * sin acción (Q-086). Como `count` no lista las vacías, abajo se puede escribir otra cola para
  * entrar.
@@ -53,6 +70,9 @@ export function DeskQueues({
   failure,
   activity,
   activityFailure,
+  queueActivity,
+  queueActivityFailure,
+  filter,
   active,
   disabledReason,
   pending,
@@ -62,6 +82,11 @@ export function DeskQueues({
   failure?: string
   activity?: DeskActivity
   activityFailure?: string
+  /** «Actividad de la cola» (F14.1): se ve aunque el check esté apagado. */
+  queueActivity: DeskActivity["queues"]
+  queueActivityFailure?: string
+  /** El filtro aplicado, con sus cuentas (F14.1). */
+  filter?: DeskFilter
   /** La cola en la que está el cursor, si está dentro de una. */
   active?: string
   /** Por qué no se puede entrar ahora; `undefined` si se puede. */
@@ -92,7 +117,7 @@ export function DeskQueues({
         <div className="flex flex-col gap-1">
           <div className="text-muted-foreground flex items-baseline justify-between px-2 text-xs">
             <span>Cola</span>
-            <span>Ahora</span>
+            <span>{filter === undefined ? "Ahora" : "Filtro / Ahora"}</span>
           </div>
           <ul
             className="flex flex-col divide-y rounded-md border"
@@ -103,7 +128,11 @@ export function DeskQueues({
                 <QueueRow
                   row={row}
                   estimated={count.estimated.includes(row.queue)}
-                  counters={activity?.queues[row.queue]}
+                  counters={
+                    activity?.queues[row.queue] ?? queueActivity[row.queue]
+                  }
+                  filtered={filter?.counts[row.queue]}
+                  filterFailure={filter?.failures[row.queue]}
                   active={row.queue === active}
                   disabled={disabled}
                   disabledReason={disabledReason}
@@ -125,6 +154,11 @@ export function DeskQueues({
       )}
       {activity !== undefined && onlyActivity.length > 0 && (
         <OnlyActivity queues={onlyActivity} activity={activity} />
+      )}
+      {queueActivityFailure !== undefined && (
+        <p className="text-destructive text-xs break-words">
+          Actividad de la cola: {queueActivityFailure}
+        </p>
       )}
       {activityFailure !== undefined && (
         <p className="text-destructive text-xs break-words">
@@ -164,6 +198,10 @@ export function DeskQueues({
           )}
         </dl>
       )}
+      {count?.additionalInfo !== undefined &&
+        count.additionalInfo.length > 0 && (
+          <AdditionalInfo items={count.additionalInfo} />
+        )}
       <OtherQueue disabled={disabled} onEnter={onEnter} />
       {disabledReason !== undefined && (
         <p className="text-muted-foreground text-xs">{disabledReason}</p>
@@ -177,6 +215,8 @@ function QueueRow({
   row,
   estimated,
   counters,
+  filtered,
+  filterFailure,
   active,
   disabled,
   disabledReason,
@@ -185,6 +225,10 @@ function QueueRow({
   row: Row
   estimated: boolean
   counters?: QueueActivityCounters
+  /** La cuenta con el filtro de la mesa, si ya llegó. */
+  filtered?: number
+  /** Por qué falló el `count` filtrado de esta cola. */
+  filterFailure?: string
   active: boolean
   disabled: boolean
   disabledReason?: string
@@ -207,13 +251,36 @@ function QueueRow({
               ≈
             </span>
           )}
+          {filterFailure !== undefined && (
+            <span
+              className="text-destructive text-xs"
+              title={`count con filtro: ${filterFailure}`}
+            >
+              error
+            </span>
+          )}
+          {filtered !== undefined && (
+            <span
+              className={cn(
+                "text-base font-semibold",
+                filtered === 0 && "text-muted-foreground font-normal"
+              )}
+              title="Con el filtro de la mesa (count con selection)"
+            >
+              {filtered}
+            </span>
+          )}
           <span
             className={cn(
-              "text-base font-semibold",
-              row.count === 0 && "text-muted-foreground font-normal"
+              filtered === undefined
+                ? "text-base font-semibold"
+                : "text-muted-foreground text-xs",
+              filtered === undefined &&
+                row.count === 0 &&
+                "text-muted-foreground font-normal"
             )}
           >
-            {row.count}
+            {filtered === undefined ? row.count : `/ ${row.count}`}
           </span>
         </span>
       </span>
@@ -308,6 +375,95 @@ function OnlyActivity({
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/**
+ * El filtro de la mesa (F14.1): el editor de `selection` de F13.1 y a qué colas se aplica.
+ * Aplicar cuenta con `count` y `selection` (uno por cola, en serie, con «Todas») y deja el
+ * filtro para `access` al entrar. La consola no valida los filtros: el error de cada cola sale
+ * en su fila.
+ */
+export function DeskFilterForm({
+  rows,
+  onRowsChange,
+  scope,
+  onScopeChange,
+  applied,
+  pending,
+  disabledReason,
+  onApply,
+  onClear,
+}: {
+  rows: SelectionRow[]
+  onRowsChange: (rows: SelectionRow[]) => void
+  scope: DeskFilterScope
+  onScopeChange: (scope: DeskFilterScope) => void
+  /** Si hay un filtro aplicado. */
+  applied: boolean
+  /** Si hay cuentas filtradas en curso. */
+  pending: boolean
+  disabledReason?: string
+  onApply: () => void
+  onClear: () => void
+}) {
+  const scopes: { value: DeskFilterScope; label: string }[] = [
+    { value: "all", label: "Todas" },
+    { value: "screen", label: "En pantalla" },
+  ]
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-2">
+      <SelectionField
+        id="desk-selection"
+        value={rows}
+        onChange={onRowsChange}
+      />
+      <div
+        className="flex items-center gap-1"
+        role="radiogroup"
+        aria-label="Colas a las que se aplica el filtro"
+      >
+        <span className="text-muted-foreground me-1 text-xs">Contar</span>
+        {scopes.map((item) => (
+          <Button
+            key={item.value}
+            type="button"
+            size="xs"
+            role="radio"
+            aria-checked={scope === item.value}
+            variant={scope === item.value ? "secondary" : "ghost"}
+            onClick={() => onScopeChange(item.value)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {scope === "all"
+          ? "Un count con filtro por cada cola del conteo, en serie."
+          : "Solo la cola en pantalla, al aplicar y al entrar."}{" "}
+        Al entrar, access usa el filtro.
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={pending || disabledReason !== undefined}
+          title={disabledReason}
+          onClick={onApply}
+        >
+          Aplicar
+        </Button>
+        {applied && (
+          <Button type="button" size="sm" variant="ghost" onClick={onClear}>
+            Quitar
+          </Button>
+        )}
+        {pending && (
+          <span className="text-muted-foreground text-xs">contando…</span>
+        )}
+      </div>
     </div>
   )
 }

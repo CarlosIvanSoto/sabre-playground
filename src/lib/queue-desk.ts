@@ -2,6 +2,7 @@ import type {
   QueueActivityCounters,
   QueueActivityResponse,
   QueueCountResponse,
+  QueueSelection,
 } from "sabre-client"
 import {
   initialQueueJourney,
@@ -45,6 +46,8 @@ export interface DeskCount {
   totals: QueueCountResponse["totals"]
   /** `QueueInfo@DateTime` tal cual, sin año. */
   countedAt?: string
+  /** `AdditionalQueueInfo`, si llegó (0.6.0): tal cual, ninguna respuesta real lo trajo aún. */
+  additionalInfo?: QueueCountResponse["additionalInfo"]
 }
 
 /**
@@ -57,6 +60,23 @@ export interface DeskActivity {
   /** Colas que no están en el conteo pero tienen contadores (Sabre lista las vacías). */
   emptyWithCounters: string[]
   analyzedAt?: string
+}
+
+/** A qué colas se aplica el filtro de la mesa (F14.1). */
+export type DeskFilterScope = "all" | "screen"
+
+/**
+ * El filtro de la mesa (F14.1, sabre-client 0.6.0): un `selection` que se usa al contar y al
+ * entrar. `count` con `selection` cuenta una cola por request, así que con `all` la mesa pide
+ * uno por cada cola del conteo, en serie, y con `screen`, solo el de la cola en pantalla.
+ */
+export interface DeskFilter {
+  selection: QueueSelection[]
+  scope: DeskFilterScope
+  /** La cuenta filtrada de cada cola que ya respondió. */
+  counts: Record<string, number>
+  /** Las colas cuyo `count` filtrado falló, con el motivo (p. ej. el `TypeError` del SDK). */
+  failures: Record<string, string>
 }
 
 /** El último paso que movió el cursor: lo que se ve en el centro. */
@@ -90,6 +110,14 @@ export interface QueueDesk {
   activity?: DeskActivity
   /** Por qué falló el último `activity`, si falló. */
   activityFailure?: string
+  /**
+   * «Actividad de la cola» (F14.1): los contadores de `activity` con `queue`, por cola. Se ven
+   * aunque el check «Actividad» (todo el PCC) esté apagado.
+   */
+  queueActivity: Record<string, QueueActivityCounters>
+  /** Por qué falló el último «Actividad de la cola», si falló. */
+  queueActivityFailure?: string
+  filter?: DeskFilter
   /** El conteo de la cola elegida al hacer clic, antes del `access`: la `N` de `n de N`. */
   total?: number
   screen?: DeskScreen
@@ -104,6 +132,12 @@ export type QueueDeskAction =
   | { type: "counted"; pcc: string; run: StepRun }
   /** Respuesta de `activity`, con el PCC con el que se pidió. */
   | { type: "activity"; pcc: string; run: StepRun }
+  /** Aplicar el filtro de la mesa, o quitarlo con `selection` vacío. Borra las cuentas filtradas. */
+  | { type: "filter"; selection?: QueueSelection[]; scope: DeskFilterScope }
+  /** Respuesta de un `count` filtrado de una cola, con el PCC con el que se pidió. */
+  | { type: "filtered"; pcc: string; queue: string; run: StepRun }
+  /** Respuesta de «Actividad de la cola». */
+  | { type: "queueActivity"; pcc: string; queue: string; run: StepRun }
   /** Clic en una cola del conteo, antes del `access`. */
   | { type: "select"; queue: string }
   /** Respuesta de un paso que mueve el cursor (`access`, `ignore`, `exit`…). */
@@ -131,7 +165,26 @@ export type QueueDeskAction =
   | { type: "sessionPcc"; pcc: string }
 
 export function initialQueueDesk(pcc = ""): QueueDesk {
-  return { pcc, journey: initialQueueJourney(pcc), recent: [] }
+  return {
+    pcc,
+    journey: initialQueueJourney(pcc),
+    recent: [],
+    queueActivity: {},
+  }
+}
+
+/** Las colas del conteo que se pueden contar con filtro: las que no tienen nombre (Q-086). */
+export function filterableQueues(count: DeskCount | undefined): string[] {
+  return (count?.queues ?? [])
+    .filter((row) => !row.named)
+    .map((row) => row.queue)
+}
+
+/** Un filtro sin cuentas: al aplicarlo, al contar de nuevo o al cambiar de PCC. */
+function clearCounts(filter: DeskFilter | undefined): DeskFilter | undefined {
+  return filter === undefined
+    ? undefined
+    : { ...filter, counts: {}, failures: {} }
 }
 
 /** Un PCC escrito a mano, normalizado: vacío si es el de la sesión. */
@@ -164,7 +217,7 @@ export function failureOf(run: StepRun | undefined): string | undefined {
     : `${error.code}: ${error.message}`
 }
 
-function countOf(run: StepRun): DeskCount | undefined {
+export function countOf(run: StepRun): DeskCount | undefined {
   if (!run.enabled || !run.step.ok) return undefined
   const response = run.step.result as QueueCountResponse | undefined
   if (!Array.isArray(response?.queues)) return undefined
@@ -178,6 +231,7 @@ function countOf(run: StepRun): DeskCount | undefined {
     totals: response.totals ?? {},
     estimated: [],
     countedAt: response.countedAt,
+    additionalInfo: response.additionalInfo,
   }
 }
 
@@ -278,7 +332,12 @@ export function queueDeskReducer(
       if (count === undefined) {
         return { ...state, countFailure: failureOf(action.run) }
       }
-      return { ...state, count, countFailure: undefined }
+      return {
+        ...state,
+        count,
+        countFailure: undefined,
+        filter: clearCounts(state.filter),
+      }
     }
     case "activity": {
       if (action.pcc !== state.pcc) return state
@@ -288,15 +347,72 @@ export function queueDeskReducer(
       }
       return { ...state, activity, activityFailure: undefined }
     }
+    case "filter": {
+      const selection = action.selection ?? []
+      if (selection.length === 0) return { ...state, filter: undefined }
+      return {
+        ...state,
+        filter: { selection, scope: action.scope, counts: {}, failures: {} },
+      }
+    }
+    case "filtered": {
+      if (action.pcc !== state.pcc || state.filter === undefined) return state
+      const { counts, failures } = state.filter
+      const response =
+        action.run.enabled && action.run.step.ok
+          ? (action.run.step.result as QueueCountResponse | undefined)
+          : undefined
+      const row = response?.queues?.find(
+        (item) => formatQueueRef(item.queue) === action.queue
+      )
+      const { [action.queue]: _count, ...otherCounts } = counts
+      const { [action.queue]: _failure, ...otherFailures } = failures
+      return {
+        ...state,
+        filter: {
+          ...state.filter,
+          counts:
+            row === undefined
+              ? otherCounts
+              : { ...otherCounts, [action.queue]: row.count },
+          failures:
+            row === undefined
+              ? {
+                  ...otherFailures,
+                  [action.queue]:
+                    failureOf(action.run) ?? "la respuesta no trae la cola",
+                }
+              : otherFailures,
+        },
+      }
+    }
+    case "queueActivity": {
+      if (action.pcc !== state.pcc) return state
+      const activity = activityOf(action.run, state.count)
+      const counters = activity?.queues[action.queue]
+      if (counters === undefined) {
+        return {
+          ...state,
+          queueActivityFailure:
+            failureOf(action.run) ?? "la respuesta no trae la cola",
+        }
+      }
+      return {
+        ...state,
+        queueActivity: { ...state.queueActivity, [action.queue]: counters },
+        queueActivityFailure: undefined,
+      }
+    }
     case "select": {
       const journey = queueJourneyReducer(state.journey, {
         type: "select",
         pcc: state.pcc,
         queue: action.queue,
       })
-      const total = state.count?.queues.find(
-        (row) => row.queue === journey.queue
-      )?.count
+      // Con filtro, la `N` de `n de N` es la cuenta filtrada, si ya llegó.
+      const total =
+        state.filter?.counts[journey.queue] ??
+        state.count?.queues.find((row) => row.queue === journey.queue)?.count
       return { ...state, journey, total }
     }
     case "moved": {
@@ -334,7 +450,11 @@ export function queueDeskReducer(
     }
     case "pcc":
       if (action.pcc === state.pcc) return state
-      return { ...initialQueueDesk(action.pcc), recent: state.recent }
+      return {
+        ...initialQueueDesk(action.pcc),
+        recent: state.recent,
+        filter: clearCounts(state.filter),
+      }
     case "sessionPcc":
       if (action.pcc === "" || state.pcc !== action.pcc) return state
       return { ...state, pcc: "", journey: { ...state.journey, pcc: "" } }

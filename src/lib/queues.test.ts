@@ -5,6 +5,8 @@ import {
   formatQueueRef,
   parseQueueRef,
   queueAccessSchema,
+  queueActivitySchema,
+  queueCountSchema,
   queueListSchema,
 } from "./queues.ts"
 import type { StepRun } from "./step/types.ts"
@@ -109,5 +111,48 @@ describe("queueListSchema.selection (F13.2)", () => {
       selection: [{ function: "pi", criteria: "11" }],
     })
     assert.deepEqual(parsed.selection, [{ function: "PI", criteria: "11" }])
+  })
+})
+
+describe("queueCountSchema y queueActivitySchema (F14.1)", () => {
+  it("solo con pcc, como lo usa el censo", () => {
+    // Las claves que faltan no aparecen: la llamada del censo queda como antes.
+    assert.deepEqual(queueCountSchema.parse({ pcc: "" }), { pcc: undefined })
+  })
+
+  it("cola, rango y filtros como texto", () => {
+    const parsed = queueCountSchema.parse({
+      pcc: "",
+      queue: "20",
+      range: { start: "", end: "" },
+      selection: [{ function: "qd", criteria: "08nov" }],
+    })
+    assert.equal(parsed.queue, 20)
+    assert.equal(parsed.range, undefined)
+    assert.deepEqual(parsed.selection, [{ function: "QD", criteria: "08NOV" }])
+  })
+
+  it("no valida combinaciones ni extremos: eso es del SDK", () => {
+    const parsed = queueCountSchema.parse({
+      pcc: "",
+      queue: "9",
+      range: { start: "25", end: "" },
+      selection: [{ function: "QD", criteria: "08NOV" }],
+    })
+    assert.equal(parsed.queue, 9)
+    assert.equal(parsed.range?.start, 25)
+    assert.ok(Number.isNaN(parsed.range?.end))
+  })
+
+  it("una cola que no es cola sí la marca el formulario", () => {
+    assert.equal(
+      queueActivitySchema.safeParse({ pcc: "", queue: "9A!" }).success,
+      false
+    )
+    assert.deepEqual(
+      queueActivitySchema.parse({ pcc: "", range: { start: "1", end: "25" } })
+        .range,
+      { start: 1, end: 25 }
+    )
   })
 })
