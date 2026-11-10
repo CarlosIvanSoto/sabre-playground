@@ -1,4 +1,8 @@
-import type { QueueCountResponse } from "sabre-client"
+import type {
+  QueueActivityCounters,
+  QueueActivityResponse,
+  QueueCountResponse,
+} from "sabre-client"
 import {
   initialQueueJourney,
   type QueueJourney,
@@ -43,6 +47,17 @@ export interface DeskCount {
   countedAt?: string
 }
 
+/**
+ * Los contadores de `queue.activity` (F12.2), por cola en texto. Se piden después de cada
+ * `count` y no se ajustan con mover o sacar: valen lo del último ⟳. No se interpretan (Q-097).
+ */
+export interface DeskActivity {
+  queues: Record<string, QueueActivityCounters>
+  /** Colas que no están en el conteo pero tienen contadores (Sabre lista las vacías). */
+  emptyWithCounters: string[]
+  analyzedAt?: string
+}
+
 /** El último paso que movió el cursor: lo que se ve en el centro. */
 export interface DeskScreen {
   method: string
@@ -71,6 +86,9 @@ export interface QueueDesk {
   count?: DeskCount
   /** Por qué falló el último `count`, si falló. */
   countFailure?: string
+  activity?: DeskActivity
+  /** Por qué falló el último `activity`, si falló. */
+  activityFailure?: string
   /** El conteo de la cola elegida al hacer clic, antes del `access`: la `N` de `n de N`. */
   total?: number
   screen?: DeskScreen
@@ -83,6 +101,8 @@ export interface QueueDesk {
 export type QueueDeskAction =
   /** Respuesta de `count`, con el PCC con el que se pidió. */
   | { type: "counted"; pcc: string; run: StepRun }
+  /** Respuesta de `activity`, con el PCC con el que se pidió. */
+  | { type: "activity"; pcc: string; run: StepRun }
   /** Clic en una cola del conteo, antes del `access`. */
   | { type: "select"; queue: string }
   /** Respuesta de un paso que mueve el cursor (`access`, `ignore`, `exit`…). */
@@ -157,6 +177,27 @@ function countOf(run: StepRun): DeskCount | undefined {
     totals: response.totals ?? {},
     estimated: [],
     countedAt: response.countedAt,
+  }
+}
+
+function activityOf(
+  run: StepRun,
+  count: DeskCount | undefined
+): DeskActivity | undefined {
+  if (!run.enabled || !run.step.ok) return undefined
+  const response = run.step.result as QueueActivityResponse | undefined
+  if (!Array.isArray(response?.queues)) return undefined
+  const counted = new Set(count?.queues.map((row) => row.queue))
+  const queues: Record<string, QueueActivityCounters> = {}
+  for (const { queue, ...counters } of response.queues) {
+    queues[formatQueueRef(queue)] = counters
+  }
+  return {
+    queues,
+    emptyWithCounters: Object.keys(queues).filter(
+      (queue) => !counted.has(queue)
+    ),
+    analyzedAt: response.analyzedAt,
   }
 }
 
@@ -237,6 +278,14 @@ export function queueDeskReducer(
         return { ...state, countFailure: failureOf(action.run) }
       }
       return { ...state, count, countFailure: undefined }
+    }
+    case "activity": {
+      if (action.pcc !== state.pcc) return state
+      const activity = activityOf(action.run, state.count)
+      if (activity === undefined) {
+        return { ...state, activityFailure: failureOf(action.run) }
+      }
+      return { ...state, activity, activityFailure: undefined }
     }
     case "select": {
       const journey = queueJourneyReducer(state.journey, {

@@ -7,6 +7,7 @@ import type { QueueItem } from "sabre-client"
 import { getBooking } from "@/app/(console)/booking/actions"
 import {
   queueAccess,
+  queueActivity,
   queueCount,
   queueExit,
   queueIgnore,
@@ -87,6 +88,7 @@ function Desk({ initialPcc }: { initialPcc: string }) {
     allowed.has(panel) ? undefined : disabledReason(place, panel)
 
   const countStep = useStep("queue.count", queueCount)
+  const activityStep = useStep("queue.activity", queueActivity)
   const accessStep = useStep("queue.access", queueAccess)
   const ignoreStep = useStep("queue.ignore", queueIgnore)
   const exitStep = useStep("queue.exit", queueExit)
@@ -167,10 +169,17 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       void refresh()
     }
 
+  // `activity` va después de `count`, no en paralelo: es la misma sesión SOAP. Sus contadores
+  // se muestran al lado del conteo (F12.2).
   const countIn = (pcc: string) =>
     countStep.execute({ pcc }, (run) => {
       dispatch({ type: "counted", pcc, run })
       void refresh()
+      if (run.enabled && run.step.ok) {
+        activityStep.execute({ pcc }, (activity) =>
+          dispatch({ type: "activity", pcc, run: activity })
+        )
+      }
     })
   const count = () => countIn(desk.pcc)
 
@@ -280,11 +289,19 @@ function Desk({ initialPcc }: { initialPcc: string }) {
               variant="ghost"
               aria-label="Volver a contar (queue.count)"
               title={reason("count") ?? "Volver a contar (queue.count)"}
-              disabled={countStep.pending || reason("count") !== undefined}
+              disabled={
+                countStep.pending ||
+                activityStep.pending ||
+                reason("count") !== undefined
+              }
               onClick={count}
             >
               <RotateCwIcon
-                className={countStep.pending ? "animate-spin" : ""}
+                className={
+                  countStep.pending || activityStep.pending
+                    ? "animate-spin"
+                    : ""
+                }
               />
             </Button>
           }
@@ -294,12 +311,14 @@ function Desk({ initialPcc }: { initialPcc: string }) {
               key={desk.pcc}
               pcc={desk.pcc}
               sessionPcc={sessionPcc}
-              disabled={moving || countStep.pending}
+              disabled={moving || countStep.pending || activityStep.pending}
               onChange={changePcc}
             />
             <DeskQueues
               count={desk.count}
               failure={desk.countFailure}
+              activity={desk.activity}
+              activityFailure={desk.activityFailure}
               active={inside ? desk.journey.queue : undefined}
               disabledReason={enterReason}
               pending={moving}

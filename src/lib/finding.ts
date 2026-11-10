@@ -8,8 +8,9 @@ import type { StepRun } from "@/lib/step/types"
  * pegar en la página de la entidad en `sabre-wiki`, con fecha (regla de discrepancias del
  * `CLAUDE.md` de la wiki). Lleva fecha, entorno, método, request, respuesta cruda y error.
  *
- * El request es lo que la consola le pasó a la server action (la entrada del paso): el SDK no
- * expone el body que manda a Sabre.
+ * Lleva dos requests: la entrada del paso (lo que la consola le pasó a la server action) y el
+ * request crudo que mandó el SDK (`onRawRequest`, ADR-029), sin `Authorization` y con el SOAP
+ * ya tapado. Auth no trae request crudo.
  *
  * Todo pasa por `redact.ts` (F6.2, #24): sin token ni datos personales, con localizador,
  * segmentos, tarifas y códigos de error tal cual.
@@ -84,6 +85,11 @@ export function findingMarkdown(source: FindingSource): string {
     step?.raw === undefined || step.raw.body === ""
       ? undefined
       : redactor.body(step.raw.body)
+  const sent = step?.rawRequest
+  const sentBody =
+    sent?.body === undefined || sent.body === ""
+      ? undefined
+      : redactor.body(sent.body)
   const input = redactor.structure(source.input)
   const issues =
     step === undefined
@@ -143,6 +149,20 @@ export function findingMarkdown(source: FindingSource): string {
 
   if (run.enabled) {
     const { step } = run
+    if (sent !== undefined) {
+      out.push("", "**Request crudo** (lo que mandó el SDK)", "")
+      out.push(
+        `\`${sent.method} ${redactor.text(sent.url)}\`${sent.attempts > 1 ? ` · último de ${sent.attempts} intentos` : ""}`
+      )
+      if (sentBody !== undefined) {
+        const pretty = prettyBody(sentBody)
+        const clipped = clip(redactor.text(pretty.text))
+        out.push("")
+        if (clipped.note !== undefined) out.push(`_${clipped.note}_`, "")
+        out.push(fence(pretty.language, clipped.text))
+      }
+    }
+
     out.push("", "**Respuesta cruda**", "")
     if (step.raw === undefined) {
       out.push("_Sin respuesta HTTP: la llamada no llegó a Sabre._")
