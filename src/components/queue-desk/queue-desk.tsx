@@ -2,8 +2,8 @@
 
 import { ExternalLink, RotateCwIcon } from "lucide-react"
 import Link from "next/link"
-import { type ReactNode, useEffect, useReducer, useState } from "react"
-import type { QueueItem } from "sabre-client"
+import { type ReactNode, useEffect, useReducer, useRef, useState } from "react"
+import type { QueueItem, QueueSelection } from "sabre-client"
 import { getBooking, reservationHistory } from "@/app/(console)/booking/actions"
 import {
   queueAccess,
@@ -15,10 +15,15 @@ import {
   queueRemove,
 } from "@/app/(console)/queues/actions"
 import { useEnvironment } from "@/components/environment/environment-provider"
+import { useHistory } from "@/components/history/history-provider"
 import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { BookingSheet } from "@/components/queue-desk/desk-booking"
 import { DeskCensus } from "@/components/queue-desk/desk-census"
-import { DeskPcc, DeskQueues } from "@/components/queue-desk/desk-queues"
+import {
+  DeskFilterButton,
+  DeskPcc,
+  DeskQueues,
+} from "@/components/queue-desk/desk-queues"
 import { DeskScreenView } from "@/components/queue-desk/desk-screen"
 import { DeskSessionBar } from "@/components/queue-desk/desk-session"
 import { MoveControl, RemoveControl } from "@/components/queue-desk/desk-write"
@@ -32,7 +37,11 @@ import { Label } from "@/components/ui/label"
 import { FAKE_REST_REASON } from "@/lib/flows"
 import {
   bookingHref,
+  countOf,
+  type DeskCount,
   type DeskDestination,
+  type DeskFilterScope,
+  filterableQueues,
   initialQueueDesk,
   type QueueDesk as QueueDeskState,
   queueDeskReducer,
@@ -43,6 +52,7 @@ import {
   type SessionPlace,
   stepsFor,
 } from "@/lib/queue-journey"
+import { queueSelection, type SelectionRow } from "@/lib/queues"
 import type { StepRun } from "@/lib/step/types"
 
 /**
@@ -79,6 +89,14 @@ function Desk({ initialPcc }: { initialPcc: string }) {
   // F13.3: `queue.activity` solo con el check «Actividad», apagado por defecto. Con él
   // apagado, ⟳ hace un solo request (`count`).
   const [withActivity, setWithActivity] = useState(false)
+  // F14.1: el filtro de la mesa. Las filas del editor y el alcance; el filtro aplicado vive en
+  // el reducer, con sus cuentas.
+  const [filterRows, setFilterRows] = useState<SelectionRow[]>([])
+  const [filterScope, setFilterScope] = useState<DeskFilterScope>("all")
+  const [filtering, setFiltering] = useState(false)
+  // Sube con cada tanda de cuentas filtradas: una tanda vieja deja de pedir.
+  const filterRun = useRef(0)
+  const { record } = useHistory()
   // Las llamadas del historial desde aquí son de la mesa: la barra de actividad solo muestra
   // esas.
   const [since] = useState(() => new Date().toISOString())
@@ -94,6 +112,7 @@ function Desk({ initialPcc }: { initialPcc: string }) {
 
   const countStep = useStep("queue.count", queueCount)
   const activityStep = useStep("queue.activity", queueActivity)
+  const queueActivityStep = useStep("queue.activity", queueActivity)
   const accessStep = useStep("queue.access", queueAccess)
   const ignoreStep = useStep("queue.ignore", queueIgnore)
   const exitStep = useStep("queue.exit", queueExit)
@@ -177,6 +196,73 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       void refresh()
     }
 
+  /** Las colas que cuenta el filtro: todas las del conteo, o la que está en pantalla. */
+  const filterTargets = (
+    scope: DeskFilterScope,
+    count: DeskCount | undefined,
+    screen?: string
+  ) =>
+    scope === "all"
+      ? filterableQueues(count)
+      : screen !== undefined && screen !== ""
+        ? [screen]
+        : []
+
+  /**
+   * `count` con `selection`, una cola por request y en serie (es la misma sesión SOAP). Cada
+   * llamada va al historial como las de `useStep`. Una tanda nueva corta la anterior.
+   */
+  const countFiltered = async (
+    pcc: string,
+    queues: string[],
+    selection: QueueSelection[]
+  ) => {
+    const id = ++filterRun.current
+    if (queues.length === 0) {
+      setFiltering(false)
+      return
+    }
+    setFiltering(true)
+    for (const queue of queues) {
+      if (filterRun.current !== id) return
+      const input = { pcc, queue, selection }
+      const at = new Date().toISOString()
+      const run = await queueCount(environment.id, input)
+      record({ method: "queue.count", at, input, run })
+      if (filterRun.current !== id) return
+      dispatch({ type: "filtered", pcc, queue, run })
+    }
+    setFiltering(false)
+  }
+
+  /** Contando: ⟳, la actividad del PCC o las cuentas filtradas, todas en la misma sesión. */
+  const counting = countStep.pending || activityStep.pending || filtering
+
+  const screenQueue = () =>
+    place === "inside" ? desk.journey.queue : undefined
+
+  /** Aplicar el filtro del editor; sin filas, lo quita. */
+  const applyFilter = () => {
+    const parsed = queueSelection.safeParse(filterRows)
+    const selection = parsed.success ? parsed.data : undefined
+    dispatch({ type: "filter", selection, scope: filterScope })
+    if (selection === undefined) {
+      filterRun.current++
+      setFiltering(false)
+      return
+    }
+    void countFiltered(
+      desk.pcc,
+      filterTargets(filterScope, desk.count, screenQueue()),
+      selection
+    )
+  }
+  const clearFilter = () => {
+    filterRun.current++
+    setFiltering(false)
+    dispatch({ type: "filter", scope: filterScope })
+  }
+
   const activityIn = (pcc: string) =>
     activityStep.execute({ pcc }, (activity) =>
       dispatch({ type: "activity", pcc, run: activity })
@@ -187,7 +273,16 @@ function Desk({ initialPcc }: { initialPcc: string }) {
     countStep.execute({ pcc }, (run) => {
       dispatch({ type: "counted", pcc, run })
       void refresh()
-      if (activity && run.enabled && run.step.ok) activityIn(pcc)
+      if (!run.enabled || !run.step.ok) return
+      if (activity) activityIn(pcc)
+      const filter = desk.filter
+      if (filter !== undefined) {
+        void countFiltered(
+          pcc,
+          filterTargets(filter.scope, countOf(run), screenQueue()),
+          filter.selection
+        )
+      }
     })
   const count = () => countIn(desk.pcc)
   /** Prender el check pide la actividad ya, si hay conteo; apagarlo solo la oculta. */
@@ -223,10 +318,17 @@ function Desk({ initialPcc }: { initialPcc: string }) {
   /** Un clic en una cola: `access`, con `exit` antes si el cursor está en otra o en unknown. */
   const enter = (queue: string) => {
     dispatch({ type: "select", queue })
+    const filter = desk.filter
     const access = () =>
       accessStep.execute(
-        { queue, pcc: desk.pcc },
-        moved("access", "queue.access")
+        { queue, pcc: desk.pcc, selection: filter?.selection ?? [] },
+        (run) => {
+          moved("access", "queue.access")(run)
+          // «En pantalla»: al entrar, la cuenta filtrada de esa cola.
+          if (filter?.scope === "screen" && run.enabled && run.step.ok) {
+            void countFiltered(desk.pcc, [queue], filter.selection)
+          }
+        }
       )
     if (place === "inside" || place === "unknown") {
       exitStep.execute({}, (run) => {
@@ -338,25 +440,26 @@ function Desk({ initialPcc }: { initialPcc: string }) {
                 />
                 Actividad
               </Label>
+              <DeskFilterButton
+                rows={filterRows}
+                onRowsChange={setFilterRows}
+                scope={filterScope}
+                onScopeChange={setFilterScope}
+                applied={desk.filter}
+                pending={filtering || moving || counting}
+                disabledReason={reason("count")}
+                onApply={applyFilter}
+                onClear={clearFilter}
+              />
               <Button
                 size="icon-xs"
                 variant="ghost"
                 aria-label="Volver a contar (queue.count)"
                 title={reason("count") ?? "Volver a contar (queue.count)"}
-                disabled={
-                  countStep.pending ||
-                  activityStep.pending ||
-                  reason("count") !== undefined
-                }
+                disabled={counting || reason("count") !== undefined}
                 onClick={count}
               >
-                <RotateCwIcon
-                  className={
-                    countStep.pending || activityStep.pending
-                      ? "animate-spin"
-                      : ""
-                  }
-                />
+                <RotateCwIcon className={counting ? "animate-spin" : ""} />
               </Button>
             </div>
           }
@@ -366,17 +469,22 @@ function Desk({ initialPcc }: { initialPcc: string }) {
               key={desk.pcc}
               pcc={desk.pcc}
               sessionPcc={sessionPcc}
-              disabled={moving || countStep.pending || activityStep.pending}
+              disabled={moving || counting}
               onChange={changePcc}
             />
             <DeskQueues
               count={desk.count}
               failure={desk.countFailure}
+              queueActivity={desk.queueActivity}
+              queueActivityFailure={desk.queueActivityFailure}
+              filter={desk.filter}
+              filterPending={filtering}
+              onClearFilter={clearFilter}
               activity={withActivity ? desk.activity : undefined}
               activityFailure={withActivity ? desk.activityFailure : undefined}
               active={inside ? desk.journey.queue : undefined}
               disabledReason={enterReason}
-              pending={moving}
+              pending={moving || filtering}
               onEnter={enter}
             />
           </div>
@@ -395,6 +503,24 @@ function Desk({ initialPcc }: { initialPcc: string }) {
               onClick={() =>
                 ignoreStep.execute({}, moved("ignore", "queue.ignore"))
               }
+            />
+            <ActionButton
+              label="Actividad de la cola"
+              method="queue.activity"
+              variant="outline"
+              reason={
+                inside
+                  ? undefined
+                  : (reason("count") ?? "Solo dentro de una cola.")
+              }
+              pending={queueActivityStep.pending}
+              onClick={() => {
+                const queue = desk.journey.queue
+                const pcc = desk.pcc
+                queueActivityStep.execute({ pcc, queue }, (run) =>
+                  dispatch({ type: "queueActivity", pcc, queue, run })
+                )
+              }}
             />
             <ActionButton
               label="Salir de la cola"
