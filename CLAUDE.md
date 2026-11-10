@@ -54,7 +54,7 @@ El stack base está fijado en el wiki: `wiki/proyectos/sabre-playground/decision
   algunas reglas apagadas para el código de shadcn. Después de `pnpm dlx shadcn add`, correr
   `pnpm format`: los componentes con íconos salen del CLI sin formatear.
 - CI: GitHub Actions (`.github/workflows/ci.yml`) corre `pnpm biome ci`, `pnpm test` y
-  `pnpm build` en cada PR, en el job "biome, tests y build", que es el check exigido en `v2`.
+  `pnpm build` en cada PR, en el job "biome, tests y build", que es el check exigido en `main`.
 - `apartado/v1/` guarda piezas de la v1 que se rescatan en la Fase 4 (sesión y colas).
   Está fuera del build y del lint; se borra cuando ya no quede nada por rescatar.
 
@@ -72,9 +72,9 @@ Comandos: `pnpm dev`, `pnpm lint`, `pnpm format`, `pnpm test`, `pnpm build`.
 
 ## Git
 
-- Rama de integración: `v2` hasta la tarea F7.4 (#28), en la que `v2` reemplaza a `main`.
-  `main` conserva la v1 hasta entonces y nunca se usa como base.
+- Rama de integración: `main`. La v2 se integró en `v2` y pasó a `main` en la tarea F7.4 (#28);
+  `v2` ya no se usa como base. La v1 está en el tag `v1`.
 - El flujo completo está en el skill `git-flow` (`.claude/skills/git-flow/SKILL.md`). Una
-  tarea = un issue = una rama = un PR = un commit squash en `v2`.
+  tarea = un issue = una rama = un PR = un commit squash en `main`.
 - Commits en Conventional Commits, sin líneas `Co-Authored-By` ni ninguna atribución a IA.
 - Push, creación de PR y merge requieren confirmación del usuario cada vez.

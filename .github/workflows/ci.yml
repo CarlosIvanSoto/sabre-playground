@@ -2,9 +2,10 @@ name: CI
 
 on:
   pull_request:
-    branches: [v2, main]
+    # v2: solo para el PR de F7.4 (#28), que todavía apunta a v2. Se quita al borrar la rama.
+    branches: [main, v2]
   push:
-    branches: [v2]
+    branches: [main]
 
 permissions:
   contents: read
