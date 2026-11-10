@@ -462,7 +462,7 @@ export function DeskFilterButton({
           id="desk-selection"
           value={rows}
           onChange={onRowsChange}
-          compact
+          hideLegend
         />
         <div className="flex flex-col gap-1">
           <div
