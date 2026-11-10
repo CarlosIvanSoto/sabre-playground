@@ -1,5 +1,6 @@
 "use client"
 
+import { CircleAlertIcon, FunnelIcon, XIcon } from "lucide-react"
 import { useState } from "react"
 import type { QueueActivityCounters } from "sabre-client"
 import { AdditionalInfo } from "@/components/queues/queue-views"
@@ -8,6 +9,15 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { Spinner } from "@/components/ui/spinner"
 import {
   type DeskActivity,
   type DeskCount,
@@ -73,6 +83,8 @@ export function DeskQueues({
   queueActivity,
   queueActivityFailure,
   filter,
+  filterPending = false,
+  onClearFilter,
   active,
   disabledReason,
   pending,
@@ -87,6 +99,9 @@ export function DeskQueues({
   queueActivityFailure?: string
   /** El filtro aplicado, con sus cuentas (F14.1). */
   filter?: DeskFilter
+  /** Si hay cuentas filtradas en curso. */
+  filterPending?: boolean
+  onClearFilter?: () => void
   /** La cola en la que está el cursor, si está dentro de una. */
   active?: string
   /** Por qué no se puede entrar ahora; `undefined` si se puede. */
@@ -103,6 +118,13 @@ export function DeskQueues({
     <div className="flex flex-col gap-3 text-sm">
       {failure !== undefined && (
         <p className="text-destructive break-words">{failure}</p>
+      )}
+      {filter !== undefined && (
+        <FilterSummary
+          filter={filter}
+          pending={filterPending}
+          onClear={() => onClearFilter?.()}
+        />
       )}
       {count === undefined ? (
         <p className="text-muted-foreground">
@@ -253,10 +275,11 @@ function QueueRow({
           )}
           {filterFailure !== undefined && (
             <span
-              className="text-destructive text-xs"
+              className="text-destructive"
               title={`count con filtro: ${filterFailure}`}
             >
-              error
+              <CircleAlertIcon className="size-3.5" aria-hidden />
+              <span className="sr-only">count con filtro: {filterFailure}</span>
             </span>
           )}
           {filtered !== undefined && (
@@ -380,12 +403,12 @@ function OnlyActivity({
 }
 
 /**
- * El filtro de la mesa (F14.1): el editor de `selection` de F13.1 y a qué colas se aplica.
- * Aplicar cuenta con `count` y `selection` (uno por cola, en serie, con «Todas») y deja el
- * filtro para `access` al entrar. La consola no valida los filtros: el error de cada cola sale
- * en su fila.
+ * El filtro de la mesa (F14.1): un botón con embudo en la cabecera de la columna, que abre el
+ * editor de `selection` de F13.1 (compacto) y el alcance. Aplicar cuenta con `count` y
+ * `selection` (uno por cola, en serie, con «Todas») y deja el filtro para `access` al entrar.
+ * La consola no valida los filtros: el error de cada cola sale en su fila.
  */
-export function DeskFilterForm({
+export function DeskFilterButton({
   rows,
   onRowsChange,
   scope,
@@ -400,70 +423,151 @@ export function DeskFilterForm({
   onRowsChange: (rows: SelectionRow[]) => void
   scope: DeskFilterScope
   onScopeChange: (scope: DeskFilterScope) => void
-  /** Si hay un filtro aplicado. */
-  applied: boolean
+  /** El filtro aplicado, si hay. */
+  applied?: DeskFilter
   /** Si hay cuentas filtradas en curso. */
   pending: boolean
   disabledReason?: string
   onApply: () => void
   onClear: () => void
 }) {
-  const scopes: { value: DeskFilterScope; label: string }[] = [
-    { value: "all", label: "Todas" },
-    { value: "screen", label: "En pantalla" },
-  ]
+  const [open, setOpen] = useState(false)
+  const label =
+    applied === undefined
+      ? "Filtrar (count con selection)"
+      : `Filtro: ${filterText(applied)}`
   return (
-    <div className="flex flex-col gap-2 rounded-md border p-2">
-      <SelectionField
-        id="desk-selection"
-        value={rows}
-        onChange={onRowsChange}
-      />
-      <div
-        className="flex items-center gap-1"
-        role="radiogroup"
-        aria-label="Colas a las que se aplica el filtro"
-      >
-        <span className="text-muted-foreground me-1 text-xs">Contar</span>
-        {scopes.map((item) => (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
           <Button
-            key={item.value}
-            type="button"
-            size="xs"
-            role="radio"
-            aria-checked={scope === item.value}
-            variant={scope === item.value ? "secondary" : "ghost"}
-            onClick={() => onScopeChange(item.value)}
+            size="icon-xs"
+            variant={applied === undefined ? "ghost" : "secondary"}
+            aria-label={label}
+            title={label}
+          />
+        }
+      >
+        <FunnelIcon />
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 gap-3">
+        <PopoverHeader>
+          <PopoverTitle>Filtro de colas</PopoverTitle>
+          <PopoverDescription className="text-xs">
+            <code>count</code> con <code>selection</code>, y <code>access</code>{" "}
+            con el mismo filtro al entrar. Lo valida el SDK.
+          </PopoverDescription>
+        </PopoverHeader>
+        <SelectionField
+          id="desk-selection"
+          value={rows}
+          onChange={onRowsChange}
+          compact
+        />
+        <div className="flex flex-col gap-1">
+          <div
+            className="flex items-center gap-1"
+            role="radiogroup"
+            aria-label="Colas que se cuentan con el filtro"
           >
-            {item.label}
+            {SCOPES.map((item) => (
+              <Button
+                key={item.value}
+                type="button"
+                size="xs"
+                role="radio"
+                aria-checked={scope === item.value}
+                variant={scope === item.value ? "secondary" : "ghost"}
+                onClick={() => onScopeChange(item.value)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            {scope === "all"
+              ? "Un count por cada cola del conteo, en serie."
+              : "Solo la cola en pantalla, al aplicar y al entrar."}
+          </p>
+        </div>
+        <div className="flex items-center justify-end gap-2">
+          {applied !== undefined && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onClear()
+                setOpen(false)
+              }}
+            >
+              Quitar
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending || disabledReason !== undefined}
+            title={disabledReason}
+            onClick={() => {
+              onApply()
+              setOpen(false)
+            }}
+          >
+            Aplicar
           </Button>
-        ))}
-      </div>
-      <p className="text-muted-foreground text-xs">
-        {scope === "all"
-          ? "Un count con filtro por cada cola del conteo, en serie."
-          : "Solo la cola en pantalla, al aplicar y al entrar."}{" "}
-        Al entrar, access usa el filtro.
-      </p>
-      <div className="flex items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          disabled={pending || disabledReason !== undefined}
-          title={disabledReason}
-          onClick={onApply}
-        >
-          Aplicar
-        </Button>
-        {applied && (
-          <Button type="button" size="sm" variant="ghost" onClick={onClear}>
-            Quitar
-          </Button>
+        </div>
+        {disabledReason !== undefined && (
+          <p className="text-muted-foreground text-xs">{disabledReason}</p>
         )}
-        {pending && (
-          <span className="text-muted-foreground text-xs">contando…</span>
-        )}
-      </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+const SCOPES: { value: DeskFilterScope; label: string }[] = [
+  { value: "all", label: "Todas las colas" },
+  { value: "screen", label: "Solo en pantalla" },
+]
+
+/** `QD-05NOV/AL-DL`, como en el host. */
+function filterText(filter: DeskFilter): string {
+  return filter.selection
+    .map((row) => `${row.function}-${row.criteria}`)
+    .join("/")
+}
+
+/** Una línea sobre la lista con el filtro aplicado, su alcance y cómo quitarlo. */
+function FilterSummary({
+  filter,
+  pending,
+  onClear,
+}: {
+  filter: DeskFilter
+  pending: boolean
+  onClear: () => void
+}) {
+  return (
+    <div className="bg-muted/50 flex items-center gap-1.5 rounded-md px-2 py-1 text-xs">
+      <FunnelIcon className="text-muted-foreground size-3 shrink-0" />
+      <code className="min-w-0 truncate" title={filterText(filter)}>
+        {filterText(filter)}
+      </code>
+      <span className="text-muted-foreground shrink-0">
+        · {filter.scope === "all" ? "todas" : "en pantalla"}
+      </span>
+      {pending && <Spinner className="size-3 shrink-0" />}
+      <Button
+        type="button"
+        size="icon-xs"
+        variant="ghost"
+        className="ms-auto size-5 shrink-0"
+        aria-label="Quitar el filtro"
+        title="Quitar el filtro"
+        onClick={onClear}
+      >
+        <XIcon />
+      </Button>
     </div>
   )
 }

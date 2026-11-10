@@ -20,7 +20,7 @@ import { ActivityBar } from "@/components/queue-desk/desk-activity"
 import { BookingSheet } from "@/components/queue-desk/desk-booking"
 import { DeskCensus } from "@/components/queue-desk/desk-census"
 import {
-  DeskFilterForm,
+  DeskFilterButton,
   DeskPcc,
   DeskQueues,
 } from "@/components/queue-desk/desk-queues"
@@ -440,6 +440,17 @@ function Desk({ initialPcc }: { initialPcc: string }) {
                 />
                 Actividad
               </Label>
+              <DeskFilterButton
+                rows={filterRows}
+                onRowsChange={setFilterRows}
+                scope={filterScope}
+                onScopeChange={setFilterScope}
+                applied={desk.filter}
+                pending={filtering || moving || counting}
+                disabledReason={reason("count")}
+                onApply={applyFilter}
+                onClear={clearFilter}
+              />
               <Button
                 size="icon-xs"
                 variant="ghost"
@@ -461,23 +472,14 @@ function Desk({ initialPcc }: { initialPcc: string }) {
               disabled={moving || counting}
               onChange={changePcc}
             />
-            <DeskFilterForm
-              rows={filterRows}
-              onRowsChange={setFilterRows}
-              scope={filterScope}
-              onScopeChange={setFilterScope}
-              applied={desk.filter !== undefined}
-              pending={filtering || moving || counting}
-              disabledReason={reason("count")}
-              onApply={applyFilter}
-              onClear={clearFilter}
-            />
             <DeskQueues
               count={desk.count}
               failure={desk.countFailure}
               queueActivity={desk.queueActivity}
               queueActivityFailure={desk.queueActivityFailure}
               filter={desk.filter}
+              filterPending={filtering}
+              onClearFilter={clearFilter}
               activity={withActivity ? desk.activity : undefined}
               activityFailure={withActivity ? desk.activityFailure : undefined}
               active={inside ? desk.journey.queue : undefined}

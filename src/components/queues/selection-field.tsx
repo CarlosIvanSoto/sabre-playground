@@ -13,7 +13,8 @@ import { SELECTION_CODES, type SelectionRow } from "@/lib/queues"
  * códigos: lo valida el SDK, y su `TypeError` se ve como el error del paso.
  *
  * `codes` elige qué códigos de la ayuda se muestran; `note`, una línea más (por ejemplo, qué
- * acepta `list`, o que el fake no filtra).
+ * acepta `list`). `compact` (la mesa, F14.1) quita la leyenda y el texto largo, y deja la ayuda
+ * como chips: un clic agrega una fila con ese código, y el título dice qué filtra.
  */
 export function SelectionField({
   id,
@@ -21,12 +22,14 @@ export function SelectionField({
   onChange,
   codes = SELECTION_CODES.map(({ code }) => code),
   note,
+  compact = false,
 }: {
   id: string
   value: SelectionRow[]
   onChange: (rows: SelectionRow[]) => void
   codes?: readonly string[]
   note?: ReactNode
+  compact?: boolean
 }) {
   // Claves estables para las filas: quitar una del medio no le pasa el foco a la siguiente.
   const next = useRef(value.length)
@@ -34,9 +37,9 @@ export function SelectionField({
   const rowKeys =
     keys.length === value.length ? keys : value.map((_, index) => index)
 
-  const add = () => {
+  const add = (code = "") => {
     setKeys([...rowKeys, next.current++])
-    onChange([...value, { function: "", criteria: "" }])
+    onChange([...value, { function: code, criteria: "" }])
   }
   const remove = (index: number) => {
     setKeys(rowKeys.filter((_, i) => i !== index))
@@ -48,7 +51,9 @@ export function SelectionField({
   const help = SELECTION_CODES.filter(({ code }) => codes.includes(code))
   return (
     <FieldSet className="gap-2">
-      <FieldLegend variant="label">selection (opcional)</FieldLegend>
+      <FieldLegend variant="label" className={compact ? "sr-only" : undefined}>
+        selection (opcional)
+      </FieldLegend>
       {value.length > 0 && (
         <ul className="flex flex-col gap-2" aria-label="Filtros">
           {value.map((row, index) => (
@@ -87,30 +92,61 @@ export function SelectionField({
           ))}
         </ul>
       )}
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="self-start"
-        onClick={add}
-      >
-        <PlusIcon />
-        Agregar filtro
-      </Button>
-      <FieldDescription>
-        Sin filas, sin filtro. Hasta 8 según el SDK: la consola no lo limita, y
-        el <code>TypeError</code> sale en el paso.
-      </FieldDescription>
-      <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-2 text-xs">
-        {help.map(({ code, meaning, example }) => (
-          <div key={code} className="contents">
-            <dt className="font-mono">{code}</dt>
-            <dd>
-              {meaning} (<code>{example}</code>)
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {compact ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            onClick={() => add()}
+          >
+            <PlusIcon />
+            Filtro
+          </Button>
+          {help.map(({ code, meaning, example }) => (
+            <Button
+              key={code}
+              type="button"
+              size="xs"
+              variant="ghost"
+              className="font-mono"
+              title={`${code}: ${meaning} (${example})`}
+              onClick={() => add(code)}
+            >
+              {code}
+            </Button>
+          ))}
+        </div>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="self-start"
+          onClick={() => add()}
+        >
+          <PlusIcon />
+          Agregar filtro
+        </Button>
+      )}
+      {!compact && (
+        <>
+          <FieldDescription>
+            Sin filas, sin filtro. Hasta 8 según el SDK: la consola no lo
+            limita, y el <code>TypeError</code> sale en el paso.
+          </FieldDescription>
+          <dl className="text-muted-foreground grid grid-cols-[auto_1fr] gap-x-2 text-xs">
+            {help.map(({ code, meaning, example }) => (
+              <div key={code} className="contents">
+                <dt className="font-mono">{code}</dt>
+                <dd>
+                  {meaning} (<code>{example}</code>)
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </>
+      )}
       {note !== undefined && <FieldDescription>{note}</FieldDescription>}
     </FieldSet>
   )
