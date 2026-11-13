@@ -17,7 +17,12 @@ import type { StepRun } from "@/lib/step/types"
  */
 export function useStep<I>(
   method: string,
-  action: (environment: ConsoleEnvironmentId, input: I) => Promise<StepRun>
+  action: (environment: ConsoleEnvironmentId, input: I) => Promise<StepRun>,
+  /**
+   * Lo que queda como entrada en el historial, si no es la entrada tal cual. La consola de
+   * comandos deja solo el primer token del comando (ADR-032).
+   */
+  recordInput: (input: I) => unknown = (input) => input
 ) {
   const { environment } = useEnvironment()
   const { record } = useHistory()
@@ -30,7 +35,7 @@ export function useStep<I>(
       const at = new Date().toISOString()
       const result = await action(environment.id, input)
       setRun(result)
-      record({ method, at, input, run: result })
+      record({ method, at, input: recordInput(input), run: result })
       onDone?.(result)
     })
 
