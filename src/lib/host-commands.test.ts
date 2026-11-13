@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { nextPlaceholder, placeholders } from "./command-line.ts"
-import { matchHostCommand, suggestHostCommands } from "./host-command-policy.ts"
+import {
+  commandVerdict,
+  matchHostCommand,
+  suggestHostCommands,
+} from "./host-command-policy.ts"
 import { HOST_COMMAND_GROUPS, HOST_COMMANDS } from "./host-commands.ts"
 
 /** Los datos del panel de comandos conocidos (F15.3), copiados de comandos-de-host. */
@@ -49,6 +53,39 @@ describe("HOST_COMMANDS", () => {
     assert.equal(matchHostCommand("SI9")?.type, "sesion")
     assert.equal(matchHostCommand("PPS1")?.template, "PPS<n>")
     assert.equal(matchHostCommand("PP*")?.type, "lectura")
+  })
+})
+
+describe("plantillas que piden el comando completo (ADR-032, hallazgo 2)", () => {
+  it("I, IR, E y ER solo coinciden enteros", () => {
+    assert.equal(matchHostCommand("I")?.template, "I")
+    assert.equal(matchHostCommand("ir")?.template, "IR")
+    assert.equal(matchHostCommand("ER")?.template, "ER")
+    assert.equal(matchHostCommand("IXYZ"), undefined)
+    assert.equal(matchHostCommand("EXYZ"), undefined)
+  })
+
+  it("*<localizador> es * y 6 letras; lo demás con * queda fuera del panel", () => {
+    assert.equal(matchHostCommand("*ABCDEF")?.template, "*<localizador>")
+    assert.equal(matchHostCommand("*RABCDE")?.template, "*<localizador>")
+    assert.equal(matchHostCommand("*ABC"), undefined)
+    assert.equal(matchHostCommand("*ABC1234"), undefined)
+    assert.equal(matchHostCommand("*R")?.type, "lectura")
+  })
+
+  it("AAA<PCC> es AAA y 3 o 4 alfanuméricos", () => {
+    assert.equal(matchHostCommand("AAAH8GI")?.template, "AAA<PCC>")
+    assert.equal(matchHostCommand("AAAX1Y")?.template, "AAA<PCC>")
+    assert.equal(matchHostCommand("AAAH8GIX"), undefined)
+  })
+
+  it("fuera del panel: en CERT pide confirmación y en producción se rechaza", () => {
+    assert.equal(commandVerdict("IXYZ", false).kind, "confirm")
+    assert.equal(commandVerdict("*ABC", true).kind, "blocked")
+  })
+
+  it("cualquier conversión DC¥ con esa forma es lectura", () => {
+    assert.equal(commandVerdict("DC¥EUR100/MXN/01JAN26", true).kind, "allowed")
   })
 })
 

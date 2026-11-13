@@ -73,7 +73,7 @@ const DESIGNATE = "wiki/sources/designate-printer-2-0-2.md"
 const TEO = "wiki/sources/impresoras-teo-y-codigos-de-pais.md"
 const SEND_COMMAND = "wiki/sources/send-sabre-command-2-0-0.md"
 
-/** Copiado de comandos-de-host (sabre-wiki 895c9e9, 2026-11-12), en el orden de la página. */
+/** Copiado de comandos-de-host (sabre-wiki cc000e1, 2026-11-12), en el orden de la página. */
 export const HOST_COMMANDS: HostCommand[] = [
   // Sesión y AAA
   {
@@ -91,6 +91,7 @@ export const HOST_COMMANDS: HostCommand[] = [
     group: "sesion",
     type: "sesion",
     source: "Account Manager, 2026-11-03",
+    match: /^AAA[A-Z0-9]{3,4}$/u,
   },
   {
     template: "SI9",
@@ -205,6 +206,7 @@ export const HOST_COMMANDS: HostCommand[] = [
     group: "pnr",
     type: "sesion",
     source: "Uso habitual",
+    match: /^\*[A-Z]{6}$/u,
   },
   {
     template: "*R",
@@ -241,6 +243,7 @@ export const HOST_COMMANDS: HostCommand[] = [
     group: "pnr",
     type: "sesion",
     source: "Uso habitual",
+    match: "exact",
   },
   {
     template: "IR",
@@ -248,6 +251,7 @@ export const HOST_COMMANDS: HostCommand[] = [
     group: "pnr",
     type: "sesion",
     source: "Uso habitual",
+    match: "exact",
   },
   {
     template: "E",
@@ -255,6 +259,7 @@ export const HOST_COMMANDS: HostCommand[] = [
     group: "pnr",
     type: "escritura",
     source: "Uso habitual",
+    match: "exact",
   },
   {
     template: "ER",
@@ -262,6 +267,7 @@ export const HOST_COMMANDS: HostCommand[] = [
     group: "pnr",
     type: "escritura",
     source: "Uso habitual",
+    match: "exact",
   },
   // Colas
   {
@@ -345,8 +351,9 @@ export const HOST_COMMANDS: HostCommand[] = [
     source: "wiki/sources/dqb-prueba-2026-11-12.md",
   },
   {
-    template: "DC¥USD1/MXN/20MAR25",
-    description: "Conversión de moneda en una fecha.",
+    template: "DC¥<moneda><monto>/<moneda>/<fecha>",
+    description:
+      "Conversión de moneda en una fecha (ejemplo: DC¥USD1/MXN/20MAR25).",
     group: "reportes",
     type: "lectura",
     source: "wiki/entities/send-sabre-command.md (prueba de 1.0.8)",
