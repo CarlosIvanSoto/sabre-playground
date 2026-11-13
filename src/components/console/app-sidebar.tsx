@@ -27,7 +27,7 @@ import {
 import { FLOWS, flowUnavailable } from "@/lib/flows"
 
 /**
- * La navegación de la consola: los siete flujos, el historial y las páginas de desarrollo. Un
+ * La navegación de la consola: los flujos, el historial y las páginas de desarrollo. Un
  * flujo que no corre en el entorno elegido se ve atenuado, con la razón en el tooltip; su
  * página explica por qué.
  */
