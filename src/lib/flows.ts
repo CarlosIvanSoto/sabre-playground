@@ -1,9 +1,10 @@
 import type { EnvironmentOption } from "@/lib/environment"
+import { FAKE_COMMAND_REASON } from "@/lib/host-command-policy"
 
 /**
- * Los siete flujos de la consola (ADR-022, consola-visual). La navegación, el encabezado de
- * cada flujo y su enlace "Qué es esto" salen de acá. Un servicio nuevo del SDK suma una
- * entrada.
+ * Los flujos de la consola: los siete de ADR-022 (consola-visual) y la consola de comandos
+ * (ADR-032). La navegación, el encabezado de cada flujo y su enlace "Qué es esto" salen de
+ * acá. Un servicio nuevo del SDK suma una entrada.
  */
 
 /**
@@ -26,6 +27,8 @@ export interface Flow {
   /** Fase del plan v2 en la que llega el flujo. */
   phase: number
   api: FlowApi
+  /** Por qué no corre en fake, si es `soap` y el fake no lo simula. */
+  fakeUnavailable?: string
 }
 
 export const FLOWS: Flow[] = [
@@ -112,6 +115,18 @@ export const FLOWS: Flow[] = [
     phase: 4,
     api: "local",
   },
+  {
+    slug: "commands",
+    number: 8,
+    title: "Comandos de host",
+    description:
+      "Mandar un comando de host en la sesión SOAP y ver la pantalla, con el panel de comandos conocidos.",
+    methods: ["session.command"],
+    wiki: "wiki/concepts/comandos-de-host.md",
+    phase: 15,
+    api: "soap",
+    fakeUnavailable: FAKE_COMMAND_REASON,
+  },
 ]
 
 export function getFlow(slug: string): Flow | undefined {
@@ -131,7 +146,10 @@ export function flowUnavailable(
   if (!environment.enabled) {
     return environment.reason ?? "entorno deshabilitado"
   }
-  if (flow.api === "rest" && environment.id === "fake") return FAKE_REST_REASON
+  if (environment.id === "fake") {
+    if (flow.api === "rest") return FAKE_REST_REASON
+    if (flow.fakeUnavailable !== undefined) return flow.fakeUnavailable
+  }
   return undefined
 }
 
