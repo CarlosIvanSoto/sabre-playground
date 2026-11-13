@@ -96,6 +96,21 @@ export function matchHostCommand(
   return best
 }
 
+/**
+ * Mientras se escribe: las entradas cuya parte fija empieza con lo escrito (`PE` → `PE*<PCC>`),
+ * si lo escrito todavía no corresponde a ninguna. Sirve para mostrar el tipo junto a la línea.
+ */
+export function suggestHostCommands(
+  command: string,
+  commands: readonly HostCommand[] = HOST_COMMANDS
+): HostCommand[] {
+  const text = canonical(command)
+  if (text === "" || text.includes("§")) return []
+  return commands.filter((entry) =>
+    templatePrefix(entry.template).toUpperCase().startsWith(text)
+  )
+}
+
 /** Por qué no se emite por comando (ADR-032, regla 3). */
 export const ISSUE_BLOCKED_REASON =
   "Emitir por comando está bloqueado en todos los entornos: en CERT se emite por Fulfill."
