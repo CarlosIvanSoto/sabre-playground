@@ -116,7 +116,7 @@ describe("commandVerdict con el largo", () => {
       "invalid"
     )
     assert.equal(
-      commandVerdict("A".repeat(MAX_COMMAND_LENGTH), CERT).kind,
+      commandVerdict("X".repeat(MAX_COMMAND_LENGTH), CERT).kind,
       "confirm"
     )
   })

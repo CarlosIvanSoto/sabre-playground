@@ -53,3 +53,36 @@ export function recall(
   }
   return { value: sent[index] ?? "", state: { index, draft: state.draft } }
 }
+
+/** Un marcador de la plantilla (`<PCC>`, `<LNIATA>`), como rango `[start, end)`. */
+export interface Placeholder {
+  start: number
+  end: number
+}
+
+/** Los marcadores que quedan en la línea, en orden. */
+export function placeholders(value: string): Placeholder[] {
+  return [...value.matchAll(/<[^<>]+>/gu)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }))
+}
+
+/**
+ * El marcador al que salta Tab (`1`) o Shift+Tab (`-1`) desde la selección `[start, end)`, o
+ * `undefined` si no hay más: entonces Tab sale de la línea, como siempre.
+ */
+export function nextPlaceholder(
+  value: string,
+  start: number,
+  end: number,
+  direction: -1 | 1 = 1
+): Placeholder | undefined {
+  const all = placeholders(value)
+  if (direction === 1) {
+    // Con un marcador seleccionado (`end > start`), el siguiente; con el cursor, el primero desde ahí.
+    const from = Math.max(end, start)
+    return all.find((placeholder) => placeholder.start >= from)
+  }
+  return all.findLast((placeholder) => placeholder.end <= start)
+}
