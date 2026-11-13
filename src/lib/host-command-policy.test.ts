@@ -122,6 +122,54 @@ describe("commandVerdict con el largo", () => {
   })
 })
 
+describe("marcadores sin llenar", () => {
+  it("se rechazan en todos los entornos, aunque vengan confirmados", () => {
+    for (const readOnly of [CERT, PROD]) {
+      assert.equal(commandVerdict("PE*<PCC>", readOnly).kind, "invalid")
+      assert.equal(gateCommand("W/TA*<PCC>", true, readOnly).ok, false)
+    }
+  })
+})
+
+describe("match exacto o con forma", () => {
+  const commands = [
+    {
+      template: "I",
+      description: "-",
+      group: "pnr",
+      type: "sesion",
+      source: "-",
+      match: "exact",
+    },
+    {
+      template: "*<localizador>",
+      description: "-",
+      group: "pnr",
+      type: "sesion",
+      source: "-",
+      match: /^\*[A-Z]{6}$/u,
+    },
+    {
+      template: "*R",
+      description: "-",
+      group: "pnr",
+      type: "lectura",
+      source: "-",
+    },
+  ] as const
+
+  it("exact pide el comando completo", () => {
+    assert.equal(matchHostCommand("i", commands)?.template, "I")
+    assert.equal(matchHostCommand("IXYZ", commands), undefined)
+  })
+
+  it("la forma le gana al prefijo", () => {
+    assert.equal(matchHostCommand("*RABCDE", commands)?.type, "sesion")
+    assert.equal(matchHostCommand("*R", commands)?.type, "lectura")
+    assert.equal(matchHostCommand("*ABC", commands), undefined)
+  })
+})
+
 describe("gateCommand (lo que decide la server action)", () => {
   it("en producción rechaza W/PT¥ON aunque venga confirmado", () => {
     assert.equal(gateCommand("W/PT¥ON", true, PROD).ok, false)

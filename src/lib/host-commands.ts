@@ -38,6 +38,12 @@ export interface HostCommand {
   type: HostCommandType
   /** De dónde sale: la página del wiki o la prueba que lo respalda. */
   source: string
+  /**
+   * Cómo coincide con un comando, si no es por prefijo (ADR-032, hallazgos de implementación):
+   * `exact` pide el comando completo (`I`, `E`); un `RegExp`, el comando completo con esa forma
+   * (`*` y 6 letras). Un comando que no la cumple no corresponde a esta entrada.
+   */
+  match?: "exact" | RegExp
 }
 
 /** Los grupos, en el orden de la página del wiki. */

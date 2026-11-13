@@ -55,10 +55,28 @@ function canonical(command: string): string {
 }
 
 /**
- * La entrada del panel que corresponde al comando, por coincidencia de prefijo (ADR-032): el
- * comando empieza con la parte fija de la plantilla. Si hay varias, gana la más larga
- * (`W/PT¥ON` es escritura aunque `W/PT¥*` sea lectura). Un comando con `§` (varios en uno) no
- * corresponde a ninguna: cada parte podría ser otra cosa.
+ * Qué tan bien corresponde el comando (ya canónico) a la entrada: `undefined` si no
+ * corresponde. Por prefijo, el largo de la parte fija; con `match` (`exact` o un `RegExp`), el
+ * comando completo, que le gana a cualquier prefijo.
+ */
+function matchScore(text: string, entry: HostCommand): number | undefined {
+  if (entry.match === "exact") {
+    return text === entry.template.toUpperCase() ? Infinity : undefined
+  }
+  if (entry.match instanceof RegExp) {
+    return entry.match.test(text) ? Infinity : undefined
+  }
+  const prefix = templatePrefix(entry.template).toUpperCase()
+  if (prefix === "" || !text.startsWith(prefix)) return undefined
+  return prefix.length
+}
+
+/**
+ * La entrada del panel que corresponde al comando (ADR-032): por coincidencia de prefijo, el
+ * comando empieza con la parte fija de la plantilla, y si hay varias gana la más larga
+ * (`W/PT¥ON` es escritura aunque `W/PT¥*` sea lectura). Las entradas con `match` piden el
+ * comando completo (`I`, `*<localizador>`) y les ganan a los prefijos. Un comando con `§`
+ * (varios en uno) no corresponde a ninguna: cada parte podría ser otra cosa.
  */
 export function matchHostCommand(
   command: string,
@@ -67,13 +85,12 @@ export function matchHostCommand(
   const text = canonical(command)
   if (text === "" || text.includes("§")) return undefined
   let best: HostCommand | undefined
-  let bestLength = 0
+  let bestScore = 0
   for (const entry of commands) {
-    const prefix = templatePrefix(entry.template).toUpperCase()
-    if (prefix === "" || !text.startsWith(prefix)) continue
-    if (prefix.length > bestLength) {
+    const score = matchScore(text, entry)
+    if (score !== undefined && score > bestScore) {
       best = entry
-      bestLength = prefix.length
+      bestScore = score
     }
   }
   return best
@@ -97,7 +114,8 @@ export function isIssueCommand(command: string): boolean {
 /**
  * Qué pasa con un comando en un entorno:
  *
- * - `invalid`: vacío o más largo que el máximo. No se manda.
+ * - `invalid`: vacío, más largo que el máximo o con un marcador sin llenar (`<PCC>`). No se
+ *   manda.
  * - `blocked`: emisión, en cualquier entorno, o en producción todo lo que no sea lectura del
  *   panel. No se manda, ni con confirmación.
  * - `confirm`: en CERT, escritura o emisión del panel, o un comando que no está en el panel.
@@ -123,6 +141,11 @@ export function commandVerdict(
       kind: "invalid",
       reason: `Mide ${length} y el máximo es ${MAX_COMMAND_LENGTH} (!, %, $, &, ¥ y § cuentan 2).`,
     }
+  }
+  // Una plantilla sin llenar no se manda en ningún entorno (ADR-032, hallazgo 5).
+  const unfilled = text.match(/<[^<>]+>/u)
+  if (unfilled !== null) {
+    return { kind: "invalid", reason: `Falta llenar ${unfilled[0]}.` }
   }
   const entry = matchHostCommand(text)
   if (isIssueCommand(text)) {
