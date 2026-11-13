@@ -3,6 +3,7 @@
 import { type KeyboardEvent, useRef, useState } from "react"
 import { runCommand } from "@/app/(console)/commands/actions"
 import { CommandLine } from "@/components/commands/command-line"
+import { CommandSend } from "@/components/commands/command-send"
 import {
   CommandType,
   HostCommandPanel,
@@ -12,19 +13,14 @@ import {
   CommandTranscript,
   ScreenResult,
 } from "@/components/commands/host-screen"
+import { useEnvironment } from "@/components/environment/environment-provider"
 import { SessionBar } from "@/components/session/session-bar"
 import { CloseStep, OpenStep } from "@/components/session/session-flow"
 import { useSessionStatus } from "@/components/session/use-session-status"
 import { StepPanel } from "@/components/step/step-panel"
 import { useStep } from "@/components/step/use-step"
-import { Button } from "@/components/ui/button"
-import { FieldDescription } from "@/components/ui/field"
 import { nextPlaceholder, placeholders } from "@/lib/command-line"
-import {
-  commandToken,
-  MAX_COMMAND_LENGTH,
-  sabreCommandLength,
-} from "@/lib/host-command-policy"
+import { commandToken, commandVerdict } from "@/lib/host-command-policy"
 import type { HostCommand } from "@/lib/host-commands"
 
 /**
@@ -70,20 +66,22 @@ function CommandConsole({
     runCommand,
     maskInput
   )
+  const { environment } = useEnvironment()
   const [command, setCommand] = useState("")
+  const [confirming, setConfirming] = useState(false)
   const [entries, setEntries] = useState<CommandEntry[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
 
   const sent = entries.map((entry) => entry.command)
   const text = command.trim()
-  const tooLong = sabreCommandLength(text) > MAX_COMMAND_LENGTH
+  // Las reglas del ADR-032, las mismas que aplica la server action.
+  const verdict = commandVerdict(text, environment.readOnly)
+  const [unfilled] = placeholders(text)
   const reason = !open
     ? "Abre la sesión primero."
-    : text === ""
-      ? undefined
-      : tooLong
-        ? `Pasa de ${MAX_COMMAND_LENGTH}: no se manda.`
-        : undefined
+    : unfilled !== undefined
+      ? `Falta llenar ${text.slice(unfilled.start, unfilled.end)}.`
+      : undefined
 
   /** Selecciona `[start, end)` en la línea, después de que React pinte el valor nuevo. */
   const select = (start: number, end: number) =>
@@ -116,8 +114,13 @@ function CommandConsole({
     input.setSelectionRange(target.start, target.end)
   }
 
-  const send = (confirmed = false) => {
-    if (text === "" || reason !== undefined) return
+  const send = (confirmed: boolean) => {
+    if (reason !== undefined) return
+    if (
+      verdict.kind !== "allowed" &&
+      !(verdict.kind === "confirm" && confirmed)
+    )
+      return
     const at = new Date().toISOString()
     execute({ command: text, confirmed }, (result) => {
       setEntries((current) => [
@@ -149,7 +152,9 @@ function CommandConsole({
               className="flex flex-col gap-3"
               onSubmit={(event) => {
                 event.preventDefault()
-                send()
+                if (verdict.kind === "confirm" && reason === undefined) {
+                  setConfirming(true)
+                } else send(false)
               }}
             >
               <CommandLine
@@ -161,21 +166,21 @@ function CommandConsole({
                 onKeyDown={tab}
                 aside={<CommandType command={command} />}
               />
-              <Button
-                type="submit"
-                disabled={pending || text === "" || reason !== undefined}
-              >
-                Mandar
-              </Button>
-              {reason !== undefined && (
-                <FieldDescription>{reason}</FieldDescription>
-              )}
+              <CommandSend
+                command={command}
+                verdict={verdict}
+                reason={reason}
+                pending={pending}
+                confirming={confirming}
+                onConfirmingChange={setConfirming}
+                onSend={send}
+              />
             </form>
           }
         />
         <CommandTranscript entries={entries} onClear={() => setEntries([])} />
       </div>
-      <HostCommandPanel onInsert={insert} />
+      <HostCommandPanel onInsert={insert} readOnly={environment.readOnly} />
     </div>
   )
 }

@@ -28,7 +28,8 @@ import {
 /**
  * El panel de comandos conocidos (F15.3): los de `host-commands.ts`, agrupados como la página
  * comandos-de-host del wiki, con búsqueda. Un clic pone la plantilla en la línea, sin
- * mandarla. Las entradas de tipo `emite` se ven, pero no se insertan (ADR-032).
+ * mandarla. Las entradas de tipo `emite`, y en producción las que no son de lectura, se ven
+ * pero no se insertan (ADR-032).
  */
 
 const TYPE_VARIANT: Record<
@@ -76,8 +77,11 @@ function matches(entry: HostCommand, query: string): boolean {
 
 export function HostCommandPanel({
   onInsert,
+  readOnly,
 }: {
   onInsert: (entry: HostCommand) => void
+  /** Producción: lo que no es lectura se ve, pero no se inserta. */
+  readOnly: boolean
 }) {
   const [search, setSearch] = useState("")
   const query = toHostSeparator(search).trim().toUpperCase()
@@ -121,13 +125,18 @@ export function HostCommandPanel({
               </h3>
               <ul className="flex flex-col">
                 {group.entries.map((entry) => {
-                  const blocked = entry.type === "emite"
+                  const blocked =
+                    entry.type === "emite"
+                      ? ISSUE_BLOCKED_REASON
+                      : readOnly && entry.type !== "lectura"
+                        ? `Producción: solo se mandan las lecturas del panel, y es de tipo ${HOST_COMMAND_TYPE_LABELS[entry.type]}.`
+                        : undefined
                   return (
                     <li key={entry.template}>
                       <button
                         type="button"
-                        disabled={blocked}
-                        title={blocked ? ISSUE_BLOCKED_REASON : entry.source}
+                        disabled={blocked !== undefined}
+                        title={blocked ?? entry.source}
                         onClick={() => onInsert(entry)}
                         className="hover:bg-muted flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-start disabled:cursor-not-allowed disabled:opacity-60"
                       >
