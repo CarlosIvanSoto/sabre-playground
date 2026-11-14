@@ -34,6 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { bookingHref, failureOf } from "@/lib/queue-desk"
 import type { StepRun } from "@/lib/step/types"
 import { uncertainOf } from "@/lib/step/uncertain"
+import { liveTicketsOf } from "@/lib/ticketing"
 
 /**
  * La hoja de reserva de la mesa (F9.4, ADR-025): `booking.get` del PNR en pantalla, por REST
@@ -142,6 +143,19 @@ function SheetBody({
   const uncertain = uncertainOf(cancel.run)
   const runVerify = () =>
     verify.execute({ confirmationId: locator, surname: "", targetPcc: pcc })
+  // Los boletos `TE` de la reserva leída: con alguno, se ofrece anularlos al cancelar (F16.3).
+  // En producción no: ni se muestra (y la action lo rechaza).
+  const tickets =
+    read && run?.enabled === true && !environment.readOnly
+      ? liveTicketsOf(run.step.result)
+      : []
+  const cancelWith = (voidTickets: boolean) =>
+    cancel.execute(
+      { confirmationId: locator, targetPcc: pcc, voidTickets },
+      (result) => {
+        if (failureOf(result) === undefined) runVerify()
+      }
+    )
 
   return (
     <>
@@ -233,14 +247,19 @@ function SheetBody({
               disabled={cancel.pending || cancelReason !== undefined}
               title={`Cancelar ${locator} (irreversible)`}
               summary={`Se cancelan todos los segmentos de ${locator} en ${environment.label}${pcc === "" ? "" : `, PCC ${pcc}`} (cancelAll). No se puede deshacer, y el PNR sigue en la cola.`}
-              onConfirm={() =>
-                cancel.execute(
-                  { confirmationId: locator, targetPcc: pcc },
-                  (result) => {
-                    if (failureOf(result) === undefined) runVerify()
-                  }
-                )
-              }
+              onConfirm={() => cancelWith(false)}
+            />
+          )}
+          {!cancelled && uncertain === undefined && tickets.length > 0 && (
+            <Confirm
+              label="Cancelar y anular boletos"
+              method="VOID"
+              variant="destructive"
+              side="top"
+              disabled={cancel.pending || cancelReason !== undefined}
+              title={`Anular ${tickets.join(", ")} y cancelar ${locator} (irreversible)`}
+              summary={`Se anulan los boletos ${tickets.join(", ")} (el void es irreversible) y se cancelan todos los segmentos de ${locator} en ${environment.label}${pcc === "" ? "" : `, PCC ${pcc}`}, en una sola llamada. El PNR sigue en la cola.`}
+              onConfirm={() => cancelWith(true)}
             />
           )}
           {cancelReason !== undefined && (

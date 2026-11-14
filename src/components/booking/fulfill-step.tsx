@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { uncertainOf } from "@/lib/step/uncertain"
+import { type UncertainOutcome, uncertainOf } from "@/lib/step/uncertain"
 import {
   type FulfillInput,
   PROD_FULFILL_REASON,
@@ -44,31 +44,33 @@ import {
  */
 export function FulfillStep({
   confirmationId: fixed,
+  defaultTargetPcc,
   waitingFor,
   disabled = false,
   onDone,
 }: {
   confirmationId?: string
+  /** El PCC de emisión inicial; si no, `SABRE_CERT_TICKETING_PCC`. */
+  defaultTargetPcc?: string
   /** Qué falta para poder emitir, si falta algo. */
   waitingFor?: string
   disabled?: boolean
-  /** Los boletos emitidos, o confirmados por Verificar. */
-  onDone?: (tickets: TicketRow[]) => void
+  /** Los boletos emitidos, o confirmados por Verificar, y su reserva. */
+  onDone?: (tickets: TicketRow[], confirmationId: string) => void
 }) {
   const { environment } = useEnvironment()
   const fulfill = useStep("tickets.fulfill", fulfillTickets)
-  const verify = useStep("tickets.verify", verifyTickets)
   const [typed, setTyped] = useState("")
-  const [targetPcc, setTargetPcc] = useState(environment.ticketingPcc ?? "")
+  const [targetPcc, setTargetPcc] = useState(
+    defaultTargetPcc ?? environment.ticketingPcc ?? ""
+  )
   const confirmationId = (fixed ?? typed).trim().toUpperCase()
   // La reserva del último intento incierto: hasta verificar, no se vuelve a emitir.
   const [blockedFor, setBlockedFor] = useState<string>()
+  // Cuántas emisiones se pidieron: cada una tiene su propia verificación.
+  const [attempt, setAttempt] = useState(0)
 
   const uncertain = uncertainOf(fulfill.run)
-  const verifyStatus =
-    verify.run?.enabled === true && verify.run.step.ok
-      ? statusOf(verify.run.step.result)
-      : undefined
   const blocked = blockedFor !== undefined && blockedFor === confirmationId
   const pcc = targetPcc.trim().toUpperCase()
 
@@ -83,26 +85,12 @@ export function FulfillStep({
 
   const emit = () => {
     const input: FulfillInput = { confirmationId, targetPcc: pcc }
-    verify.reset()
+    setAttempt((n) => n + 1)
     fulfill.execute(input, (run) => {
       if (uncertainOf(run) !== undefined) setBlockedFor(confirmationId)
-      else if (run.enabled && run.step.ok) onDone?.(ticketsOf(run.step.result))
-    })
-  }
-
-  const runVerify = () => {
-    const input: VerifyInput = {
-      confirmationId: uncertain?.confirmationId ?? confirmationId,
-      targetPcc: pcc,
-      expectedTickets: uncertain?.tickets.map((ticket) => ticket.number),
-    }
-    verify.execute(input, (run) => {
-      if (!run.enabled || !run.step.ok) return
-      const status = statusOf(run.step.result)
-      // Solo `notFound` dice que no se emitió: entonces Emitir se puede volver a pedir, con su
-      // propia confirmación. Con `issued` o `notCommitted`, los boletos existen.
-      if (status === "notFound") setBlockedFor(undefined)
-      else onDone?.(ticketsOf(run.step.result))
+      else if (run.enabled && run.step.ok) {
+        onDone?.(ticketsOf(run.step.result), confirmationId)
+      }
     })
   }
 
@@ -175,44 +163,19 @@ export function FulfillStep({
         }
       />
       {uncertain !== undefined && (
-        <StepPanel
-          title="tickets.verify"
-          description={
-            <>
-              Un Get Booking que decide con <code>ticketStatusCode</code>, no
-              con <code>isTicketed</code>. Con los boletos que Sabre alcanzó a
-              devolver como <code>expectedTickets</code>, distingue{" "}
-              <code>notCommitted</code> (existen) de <code>notFound</code>.
-            </>
-          }
-          run={verify.run}
-          pending={verify.pending}
-          resultView={(result) => <VerifyView result={result} />}
-          form={
-            <div className="flex flex-col gap-4">
-              <p className="text-sm">
-                Incierto <code>{uncertain.reason}</code> en{" "}
-                <code className="font-mono">
-                  {uncertain.confirmationId ?? confirmationId}
-                </code>
-                .
-                {uncertain.tickets.length > 0 &&
-                  ` Se esperan ${uncertain.tickets.map((t) => t.number).join(", ")}.`}
-              </p>
-              <Button
-                variant="outline"
-                disabled={verify.pending}
-                onClick={runVerify}
-              >
-                Verificar
-              </Button>
-              {verifyStatus !== undefined && (
-                <FieldDescription>
-                  {VERIFY_STATUS_TEXT[verifyStatus] ?? verifyStatus}
-                </FieldDescription>
-              )}
-            </div>
-          }
+        <VerifyPanel
+          // Un intento nuevo es otra verificación.
+          key={attempt}
+          uncertain={uncertain}
+          confirmationId={uncertain.confirmationId ?? confirmationId}
+          targetPcc={pcc}
+          statusText={VERIFY_STATUS_TEXT}
+          onVerified={(status, tickets) => {
+            // Solo `notFound` dice que no se emitió: entonces Emitir se puede volver a pedir,
+            // con su propia confirmación. Con `issued` o `notCommitted`, los boletos existen.
+            if (status === "notFound") setBlockedFor(undefined)
+            else onDone?.(tickets, uncertain.confirmationId ?? confirmationId)
+          }}
         />
       )}
     </>
@@ -238,13 +201,95 @@ function FulfillView({ result }: { result: unknown }) {
   )
 }
 
-function VerifyView({ result }: { result: unknown }) {
+/**
+ * **Verificar** ante un desenlace incierto (ADR-031): `tickets.verify`, con los boletos que Sabre
+ * alcanzó a devolver como `expectedTickets`. Lo usan la emisión y el void, cada uno con sus textos
+ * para cada `status`. No hay botón de reintentar.
+ */
+export function VerifyPanel({
+  uncertain,
+  confirmationId,
+  targetPcc,
+  statusText,
+  onVerified,
+}: {
+  uncertain: UncertainOutcome
+  confirmationId: string
+  targetPcc: string
+  statusText: Record<string, string>
+  onVerified?: (status: string | undefined, tickets: TicketRow[]) => void
+}) {
+  const verify = useStep("tickets.verify", verifyTickets)
+  const status =
+    verify.run?.enabled === true && verify.run.step.ok
+      ? statusOf(verify.run.step.result)
+      : undefined
+  const run = () => {
+    const input: VerifyInput = {
+      confirmationId,
+      targetPcc,
+      expectedTickets: uncertain.tickets.map((ticket) => ticket.number),
+    }
+    verify.execute(input, (result) => {
+      if (!result.enabled || !result.step.ok) return
+      onVerified?.(statusOf(result.step.result), ticketsOf(result.step.result))
+    })
+  }
+  return (
+    <StepPanel
+      title="tickets.verify"
+      description={
+        <>
+          Un Get Booking que decide con <code>ticketStatusCode</code>, no con{" "}
+          <code>isTicketed</code>. Con los boletos que Sabre alcanzó a devolver
+          como <code>expectedTickets</code>, distingue <code>notCommitted</code>{" "}
+          (existen) de <code>notFound</code>.
+        </>
+      }
+      run={verify.run}
+      pending={verify.pending}
+      resultView={(result) => (
+        <VerifyView result={result} statusText={statusText} />
+      )}
+      form={
+        <div className="flex flex-col gap-4">
+          <p className="text-sm">
+            Incierto <code>{uncertain.reason}</code>
+            {uncertain.operation !== undefined && (
+              <>
+                {" "}
+                de <code>{uncertain.operation}</code>
+              </>
+            )}{" "}
+            en <code className="font-mono">{confirmationId}</code>.
+            {uncertain.tickets.length > 0 &&
+              ` Se esperan ${uncertain.tickets.map((t) => t.number).join(", ")}.`}
+          </p>
+          <Button variant="outline" disabled={verify.pending} onClick={run}>
+            Verificar
+          </Button>
+          {status !== undefined && (
+            <FieldDescription>{statusText[status] ?? status}</FieldDescription>
+          )}
+        </div>
+      }
+    />
+  )
+}
+
+function VerifyView({
+  result,
+  statusText,
+}: {
+  result: unknown
+  statusText: Record<string, string>
+}) {
   const status = statusOf(result)
   const missing = (result as { missing?: string[] } | undefined)?.missing
   return (
     <div className="flex flex-col gap-3">
       {status !== undefined && (
-        <p className="text-sm">{VERIFY_STATUS_TEXT[status] ?? status}</p>
+        <p className="text-sm">{statusText[status] ?? status}</p>
       )}
       {missing !== undefined && missing.length > 0 && (
         <p className="text-sm">

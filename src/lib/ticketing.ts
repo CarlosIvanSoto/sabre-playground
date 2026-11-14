@@ -15,17 +15,82 @@ import { optionalPcc } from "./queues.ts"
 export const PROD_FULFILL_REASON =
   "Emitir no corre en producción: solo en CERT (o en fake). Cualquier Fulfill válido en producción emite de verdad."
 
+/** Por qué no se anula en producción. */
+export const PROD_VOID_REASON =
+  "Anular boletos no corre en producción: solo en CERT (o en fake)."
+
+type Gate = { ok: true } | { ok: false; reason: string }
+
+/** Solo en CERT y en fake; un entorno que no se conoce cuenta como producción. */
+function ticketingGate(
+  id: ConsoleEnvironmentId,
+  readOnly: boolean | undefined,
+  reason: string
+): Gate {
+  if (id === "fake") return { ok: true }
+  if (readOnly !== false) return { ok: false, reason }
+  return { ok: true }
+}
+
 /**
- * Si se puede emitir en el entorno: solo en CERT y en fake. `readOnly` es producción
- * (`EnvironmentOption.readOnly`); un entorno que no se conoce cuenta como producción.
+ * Si se puede emitir en el entorno. `readOnly` es producción (`EnvironmentOption.readOnly`). Lo
+ * aplica la server action antes de llamar a Sabre.
  */
 export function fulfillGate(
   id: ConsoleEnvironmentId,
   readOnly: boolean | undefined
-): { ok: true } | { ok: false; reason: string } {
-  if (id === "fake") return { ok: true }
-  if (readOnly !== false) return { ok: false, reason: PROD_FULFILL_REASON }
-  return { ok: true }
+): Gate {
+  return ticketingGate(id, readOnly, PROD_FULFILL_REASON)
+}
+
+/** Si se puede anular (`booking.cancel` con `VOID`) en el entorno. Igual que emitir. */
+export function voidGate(
+  id: ConsoleEnvironmentId,
+  readOnly: boolean | undefined
+): Gate {
+  return ticketingGate(id, readOnly, PROD_VOID_REASON)
+}
+
+/**
+ * Los boletos vigentes de una reserva (Get Booking): los `flightTickets` en `TE`. Se mira el
+ * `ticketStatusCode`, no `isTicketed`, que queda en `true` después del void (S8). El void solo se
+ * ofrece si hay alguno.
+ */
+export function liveTicketsOf(booking: unknown): string[] {
+  const tickets = (booking as { flightTickets?: unknown } | undefined)
+    ?.flightTickets
+  if (!Array.isArray(tickets)) return []
+  return tickets
+    .filter(
+      (ticket): ticket is { number: string; ticketStatusCode: string } =>
+        typeof ticket === "object" &&
+        ticket !== null &&
+        typeof (ticket as { number?: unknown }).number === "string" &&
+        (ticket as { ticketStatusCode?: unknown }).ticketStatusCode === "TE"
+    )
+    .map((ticket) => ticket.number)
+}
+
+/** Los números de `voidedTickets` de un resultado de Cancel Booking. */
+export function voidedTicketsOf(result: unknown): string[] {
+  const voided = (result as { voidedTickets?: unknown } | undefined)
+    ?.voidedTickets
+  return Array.isArray(voided)
+    ? voided.filter((n): n is string => typeof n === "string")
+    : []
+}
+
+/**
+ * Qué quiere decir `tickets.verify` después de un void incierto: con boletos `TE` el void no se
+ * hizo; sin ellos, sí (quedaron en `TV`).
+ */
+export const VOID_VERIFY_STATUS_TEXT: Record<string, string> = {
+  issued:
+    "La reserva sigue con boletos vigentes (TE): el void no se hizo. Volver a anular es una decisión aparte, con su confirmación.",
+  notCommitted:
+    "Hay boletos que existen y no están en el PNR: revisa la reserva antes de hacer nada.",
+  notFound:
+    "La reserva ya no tiene boletos vigentes: el void se hizo (quedaron en TV). No se vuelve a anular.",
 }
 
 const confirmationId = z
