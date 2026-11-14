@@ -1,5 +1,11 @@
 import type { EnvironmentOption } from "@/lib/environment"
-import { FAKE_COMMAND_REASON } from "@/lib/host-command-policy"
+
+/**
+ * Por qué la consola de comandos no corre en fake. Vive acá, y no junto a la política de
+ * comandos, porque el menú de flujos está en todas las páginas y la política importa el SDK.
+ */
+export const FAKE_COMMAND_REASON =
+  "el fake de sabre-client 0.7.0 no simula session.command()"
 
 /**
  * Los flujos de la consola: los siete de ADR-022 (consola-visual) y la consola de comandos

@@ -46,6 +46,7 @@ import {
   type ReservationHistoryInput,
   reservationHistorySchema,
 } from "@/lib/booking"
+import { uncertainOf } from "@/lib/step/uncertain"
 
 /**
  * Flujo 4: leer o cancelar una reserva por su localizador, y ver su historial
@@ -236,6 +237,14 @@ function BookingCancelStep() {
     },
   })
   const errors = form.formState.errors
+  // Con un desenlace incierto (ADR-031) no se vuelve a cancelar el mismo localizador: se
+  // verifica antes con booking.get. El StepPanel muestra el incierto aparte del error.
+  const uncertain = uncertainOf(run)
+  const locator = form.watch("confirmationId").trim().toUpperCase()
+  const blocked =
+    uncertain !== undefined &&
+    (uncertain.confirmationId === undefined ||
+      uncertain.confirmationId.toUpperCase() === locator)
   // Lo validado, esperando la confirmación del diálogo.
   const [pendingInput, setPendingInput] = useState<BookingCancelInput>()
 
@@ -292,9 +301,19 @@ function BookingCancelStep() {
               </Field>
             )}
           />
-          <Button type="submit" variant="destructive" disabled={pending}>
+          <Button
+            type="submit"
+            variant="destructive"
+            disabled={pending || blocked}
+          >
             Cancelar reserva
           </Button>
+          {blocked && (
+            <FieldDescription>
+              El último intento quedó incierto: verifica la reserva con{" "}
+              <code>booking.get</code> antes de volver a cancelar.
+            </FieldDescription>
+          )}
           <AlertDialog
             open={pendingInput !== undefined}
             onOpenChange={(open) => {

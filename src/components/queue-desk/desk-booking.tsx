@@ -18,7 +18,7 @@ import { EnvironmentBadge } from "@/components/environment/environment-badge"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { Confirm } from "@/components/queue-desk/desk-write"
 import { RawBody } from "@/components/step/raw-body"
-import { StepOutput } from "@/components/step/step-panel"
+import { StepOutput, UncertainAlert } from "@/components/step/step-panel"
 import { useStep } from "@/components/step/use-step"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button, buttonVariants } from "@/components/ui/button"
@@ -33,6 +33,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { bookingHref, failureOf } from "@/lib/queue-desk"
 import type { StepRun } from "@/lib/step/types"
+import { uncertainOf } from "@/lib/step/uncertain"
 
 /**
  * La hoja de reserva de la mesa (F9.4, ADR-025): `booking.get` del PNR en pantalla, por REST
@@ -137,6 +138,10 @@ function SheetBody({
       : undefined
   const cancelled =
     cancel.run !== undefined && failureOf(cancel.run) === undefined
+  // Un incierto (ADR-031) no se reintenta: se verifica con `booking.get`.
+  const uncertain = uncertainOf(cancel.run)
+  const runVerify = () =>
+    verify.execute({ confirmationId: locator, surname: "", targetPcc: pcc })
 
   return (
     <>
@@ -219,7 +224,7 @@ function SheetBody({
         </section>
         <section className="flex flex-col gap-2 border-t pt-4">
           <h3 className="text-sm font-medium">Cancelar la reserva</h3>
-          {!cancelled && (
+          {!cancelled && uncertain === undefined && (
             <Confirm
               label="Cancelar reserva"
               method="booking.cancel"
@@ -232,13 +237,7 @@ function SheetBody({
                 cancel.execute(
                   { confirmationId: locator, targetPcc: pcc },
                   (result) => {
-                    if (failureOf(result) === undefined) {
-                      verify.execute({
-                        confirmationId: locator,
-                        surname: "",
-                        targetPcc: pcc,
-                      })
-                    }
+                    if (failureOf(result) === undefined) runVerify()
                   }
                 )
               }
@@ -248,15 +247,39 @@ function SheetBody({
             <p className="text-muted-foreground text-xs">{cancelReason}</p>
           )}
           {cancel.pending && <Spinner />}
-          {cancel.run !== undefined && !cancelled && (
-            <Alert variant="destructive">
-              <CircleAlert />
-              <AlertTitle>No se canceló</AlertTitle>
-              <AlertDescription className="break-words">
-                {failureOf(cancel.run)}
-              </AlertDescription>
-            </Alert>
+          {uncertain !== undefined && (
+            <>
+              <UncertainAlert outcome={uncertain} />
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={verify.pending}
+                  onClick={runVerify}
+                >
+                  Verificar
+                </Button>
+              </div>
+              {(verify.pending || verify.run !== undefined) && (
+                <StepTabs
+                  run={verify.run}
+                  pending={verify.pending}
+                  name={`booking-${locator}-verify`}
+                />
+              )}
+            </>
           )}
+          {cancel.run !== undefined &&
+            !cancelled &&
+            uncertain === undefined && (
+              <Alert variant="destructive">
+                <CircleAlert />
+                <AlertTitle>No se canceló</AlertTitle>
+                <AlertDescription className="break-words">
+                  {failureOf(cancel.run)}
+                </AlertDescription>
+              </Alert>
+            )}
           {cancelled && (
             <>
               <Alert>

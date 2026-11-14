@@ -1,3 +1,4 @@
+import { MAX_COMMAND_LENGTH, sabreCommandLength } from "sabre-client"
 import { HOST_COMMANDS, type HostCommand } from "./host-commands.ts"
 
 /**
@@ -6,26 +7,16 @@ import { HOST_COMMANDS, type HostCommand } from "./host-commands.ts"
  * las usa para avisar antes de mandar. El SDK no pone reglas (ADR-021, regla 5): la consola sí,
  * porque sabe en qué entorno está.
  *
- * Este módulo no es `server-only` ni importa el SDK: lo usan el cliente, el servidor y los
- * tests.
+ * Este módulo no es `server-only`: lo usan el cliente, el servidor y los tests. Del SDK solo
+ * importa `sabreCommandLength` y `MAX_COMMAND_LENGTH`, que no tocan la red ni las credenciales.
  */
 
 /**
- * El largo máximo de `SabreCommandLLSRQ`. `sabre-client` 0.6.0 tiene `MAX_COMMAND_LENGTH` y
- * `sabreCommandLength`, pero no los exporta: la consola usa la misma regla, y el `TypeError`
- * del SDK sigue siendo la validación final.
+ * El largo de `SabreCommandLLSRQ` es el del SDK (sabre#233, públicos desde la 0.7.0): `!`, `%`,
+ * `$`, `&`, `¥` y `§` cuentan 2, y el máximo es `MAX_COMMAND_LENGTH`. La consola avisa antes de
+ * mandar con la misma regla, y el `TypeError` del SDK sigue siendo la validación final.
  */
-export const MAX_COMMAND_LENGTH = 1023
-
-/** Los caracteres que cuentan 2 en el largo de Sabre. */
-const DOUBLE_WIDTH = new Set(["!", "%", "$", "&", "¥", "§"])
-
-/** El largo según Sabre: `!`, `%`, `$`, `&`, `¥` y `§` cuentan 2. */
-export function sabreCommandLength(command: string): number {
-  let length = 0
-  for (const char of command) length += DOUBLE_WIDTH.has(char) ? 2 : 1
-  return length
-}
+export { MAX_COMMAND_LENGTH, sabreCommandLength }
 
 /**
  * `‡` (el separador de Sabre Red) a `¥` (el de la API). Es una ayuda de la consola, a la vista:
@@ -114,10 +105,6 @@ export function suggestHostCommands(
 /** Por qué no se emite por comando (ADR-032, regla 3). */
 export const ISSUE_BLOCKED_REASON =
   "Emitir por comando está bloqueado en todos los entornos: en CERT se emite por Fulfill."
-
-/** Por qué la consola no corre en fake. */
-export const FAKE_COMMAND_REASON =
-  "el fake de sabre-client 0.6.0 no simula session.command()"
 
 /** Si alguna parte del comando (separadas por `§`) es un formato de emisión (`W¥…`). */
 export function isIssueCommand(command: string): boolean {
