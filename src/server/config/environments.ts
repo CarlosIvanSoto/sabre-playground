@@ -43,6 +43,8 @@ export interface EnvironmentConfig {
   /** Producción: sin Create ni Cancel Booking, y colas con confirmación explícita. */
   readOnly: boolean
   sabre: CredentialsConfig
+  /** `<prefix>_TICKETING_PCC`: el PCC IATA para reservar y emitir. Solo CERT (F16.2). */
+  ticketingPcc?: string
 }
 
 /** Lo que puede ver el cliente: sin credenciales ni valores de variables. */
@@ -143,8 +145,12 @@ function credentialsConfig(
   prefix: string,
   environment: SabreEnvironment
 ): CredentialsConfig {
-  // SABRE_PROD_ENABLED es el interruptor, no una credencial.
-  const { ENABLED: _enabled, ...vars } = pick(env, prefix)
+  // SABRE_PROD_ENABLED es el interruptor y TICKETING_PCC un PCC de trabajo: no son credenciales.
+  const {
+    ENABLED: _enabled,
+    TICKETING_PCC: _ticketingPcc,
+    ...vars
+  } = pick(env, prefix)
   if (Object.values(vars).every((value) => !value?.trim())) {
     return { enabled: false, reason: `sin variables ${prefix}_*` }
   }
@@ -197,14 +203,30 @@ function credentialsConfig(
 
 function environmentConfig(env: Env, id: EnvironmentId): EnvironmentConfig {
   const { prefix, label, sdkEnvironment, readOnly } = ENVIRONMENTS[id]
+  // En producción no se emite (ADR-031, F16.2): no hay PCC de emisión que proponer.
+  const ticketingPcc = readOnly
+    ? undefined
+    : ticketingPccSchema.safeParse(env[`${prefix}_TICKETING_PCC`]).data
   return {
     id,
     label,
     sdkEnvironment,
     readOnly,
     sabre: credentialsConfig(env, prefix, sdkEnvironment),
+    ...(ticketingPcc === undefined ? {} : { ticketingPcc }),
   }
 }
+
+/** Un PCC de 3 o 4 letras o dígitos; vacío o con otra forma, no hay. */
+const ticketingPccSchema = z.preprocess(
+  blankToUndefined,
+  z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{3,4}$/)
+    .optional()
+)
 
 /** Lee y valida la configuración. Exportada aparte para poder probarla con otro `env`. */
 export function loadEnvironments(env: Env): EnvironmentConfig[] {
@@ -231,14 +253,17 @@ export function getEnvironment(
 }
 
 export function getEnvironmentSummary(): EnvironmentSummary[] {
-  return getEnvironments().map(({ id, label, readOnly, sabre }) => ({
-    id,
-    label,
-    readOnly,
-    ...(sabre.enabled
-      ? { enabled: true }
-      : { enabled: false, reason: sabre.reason }),
-  }))
+  return getEnvironments().map(
+    ({ id, label, readOnly, sabre, ticketingPcc }) => ({
+      id,
+      label,
+      readOnly,
+      ...(sabre.enabled
+        ? { enabled: true }
+        : { enabled: false, reason: sabre.reason }),
+      ...(ticketingPcc === undefined ? {} : { ticketingPcc }),
+    })
+  )
 }
 
 const FAKE_OPTION: EnvironmentOption = {

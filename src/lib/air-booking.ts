@@ -5,6 +5,7 @@ import type {
   ItineraryGroup,
 } from "sabre-client"
 import { z } from "zod"
+import { optionalPcc } from "./queues.ts"
 
 /**
  * Entradas y vistas del flujo 2 (Air Booking de punta a punta). Lo usan el formulario y las
@@ -242,9 +243,13 @@ export const createSchema = chosenItinerarySchema.extend({
     .default([]),
   /** El mapa del paso de asientos: con él, el SDK avisa si un asiento elegido tiene precio. */
   seatAvailability: z.looseObject({ response: z.looseObject({}) }).optional(),
+  /** El PCC en el que se reserva (F16.2): el IATA de emisión, para que después se pueda emitir. */
+  targetPcc: optionalPcc.optional(),
 })
 
 export interface CreateInput extends ChosenItinerary {
+  /** Vacío: el PCC de auth. */
+  targetPcc?: string
   travelers: number
   seats?: BookingSeatSelection[]
   seatAvailability?: GetSeatsResponse
@@ -262,6 +267,37 @@ export function syntheticTravelers(count: number) {
     passengerCode: "ADT",
   }))
 }
+
+/** Fecha de nacimiento sintética de los viajeros, para Secure Flight. */
+export const SYNTHETIC_BIRTH_DATE = "1980-01-01"
+
+/**
+ * Los viajeros sintéticos con lo que pide emitir (S8 de `emision-de-boletos`, F16.2): fecha de
+ * nacimiento y Secure Flight (`SECURE_FLIGHT_PASSENGER_DATA`) con el mismo nombre que el
+ * viajero. Sabre lo exige si el vuelo pasa por EE. UU. (`PASSENGER SECURITY DATA REQUIRED`); la
+ * consola lo manda siempre, porque no sabe por dónde pasa el vuelo.
+ */
+export function ticketableTravelers(count: number) {
+  return syntheticTravelers(count).map((traveler) => ({
+    ...traveler,
+    birthDate: SYNTHETIC_BIRTH_DATE,
+    identityDocuments: [
+      {
+        documentType: "SECURE_FLIGHT_PASSENGER_DATA",
+        givenName: traveler.givenName,
+        surname: traveler.surname,
+        birthDate: SYNTHETIC_BIRTH_DATE,
+        gender: "MALE",
+      },
+    ],
+  }))
+}
+
+/**
+ * El DK (número de cliente) sintético de diez ceros, el precedente de CERT. Un PCC que exige DK
+ * no crea el PNR sin él (`UNABLE_TO_END_TRANSACTION_ADD_AGENCY_CUSTOMER_IDENTIFIER`).
+ */
+export const SYNTHETIC_DK = "0000000000"
 
 /** Contacto sintético: un dominio reservado (`example.com`) y un 555. */
 export const SYNTHETIC_CONTACT = {

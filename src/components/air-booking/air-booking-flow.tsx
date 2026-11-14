@@ -10,6 +10,7 @@ import { JourneyProgress } from "@/components/air-booking/journey-progress"
 import { RevalidateStep } from "@/components/air-booking/revalidate-step"
 import { SearchStep } from "@/components/air-booking/search-step"
 import { SeatsStep } from "@/components/air-booking/seats-step"
+import { FulfillStep } from "@/components/booking/fulfill-step"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import {
   hasLiveBooking,
@@ -122,6 +123,18 @@ export function AirBookingFlow() {
         }
         disabled={late}
         onRead={(ok) => dispatch({ type: "read", ok })}
+      />
+      <FulfillStep
+        key={`fulfill-${confirmationId ?? "none"}-${environment.id}`}
+        confirmationId={confirmationId}
+        waitingFor={
+          confirmationId === undefined
+            ? "Reserva en el paso 4."
+            : journey.cancelled
+              ? "La reserva ya se canceló."
+              : undefined
+        }
+        disabled={late}
       />
       <CleanupStep
         key={`cleanup-${generation.cleanup}`}

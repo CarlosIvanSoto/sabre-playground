@@ -20,4 +20,9 @@ export interface EnvironmentOption {
   enabled: boolean
   /** Por qué está deshabilitado. */
   reason?: string
+  /**
+   * El PCC IATA en el que se reserva y se emite (`SABRE_CERT_TICKETING_PCC`, F16.2). Solo CERT:
+   * la UI lo propone como `targetPcc`, y se puede cambiar. No es una credencial.
+   */
+  ticketingPcc?: string
 }

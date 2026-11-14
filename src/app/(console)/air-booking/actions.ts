@@ -12,8 +12,9 @@ import {
   createSchema,
   revalidateSchema,
   SYNTHETIC_CONTACT,
+  SYNTHETIC_DK,
   searchSchema,
-  syntheticTravelers,
+  ticketableTravelers,
 } from "@/lib/air-booking"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
 import type { StepRun } from "@/lib/step/types"
@@ -117,7 +118,9 @@ export async function getSeatsForItinerary(
 /**
  * Paso 4 (F3.4, #15): `buildBookingFlightDetails` y `booking.create`, con el itinerario
  * revalidado y, si se eligieron, los asientos del paso 3. Los viajeros (`TEST/PASSENGER`) y el
- * contacto son sintéticos y los pone el servidor. Sin `targetPcc`: reserva en el PCC de auth.
+ * contacto son sintéticos y los pone el servidor. Con `targetPcc`, reserva en ese PCC (el IATA
+ * de emisión, F16.2); sin él, en el de auth. Siempre van el DK sintético y Secure Flight, lo que
+ * pide un PCC IATA para poder emitir después (S8 de `emision-de-boletos`).
  *
  * Es una escritura: el SDK no la reintenta y la consola tampoco. Si falla (p. ej.
  * `UNABLE_TO_BOOK_FLIGHTS_WRONG_STATUS_CODE` con un vuelo en `UC`, o `AUTH-176` con un asiento
@@ -141,7 +144,7 @@ export async function createBooking(
     if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
     const sabre = getSabre(id)
     if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
-    const { group, itinerary, travelers, seats, seatAvailability } =
+    const { group, itinerary, travelers, seats, seatAvailability, targetPcc } =
       parsed.data as typeof parsed.data & CreateInput
     return {
       enabled: true,
@@ -154,8 +157,10 @@ export async function createBooking(
               seats,
               seatAvailability,
             }),
-            travelers: syntheticTravelers(travelers),
+            travelers: ticketableTravelers(travelers),
             contactInfo: SYNTHETIC_CONTACT,
+            agency: { agencyCustomerNumber: SYNTHETIC_DK },
+            ...(targetPcc === undefined ? {} : { targetPcc }),
           },
           options
         )
