@@ -137,6 +137,17 @@ export const FLOWS: Flow[] = [
     api: "soap",
     fakeUnavailable: FAKE_COMMAND_REASON,
   },
+  {
+    slug: "sales",
+    number: 9,
+    title: "Ventas del día",
+    description:
+      "El reporte de ventas de un PCC y una fecha, con su status, las anuladas marcadas y los totales.",
+    methods: ["session.reporting.dailySalesSummary"],
+    wiki: "wiki/proyectos/sabre-client/decisiones/ventas-del-dia-summary.md",
+    phase: 16,
+    api: "soap",
+  },
 ]
 
 export function getFlow(slug: string): Flow | undefined {

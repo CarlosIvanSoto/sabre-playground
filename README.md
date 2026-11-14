@@ -32,6 +32,8 @@ que no sale a la red:
   atiende al cliente REST: el token, Create, Get y Cancel Booking y Fulfill. La mesa de colas
   y el censo leen las reservas por ahí. Ver [Qué simula el fake REST](#qué-simula-el-fake-rest).
 - **Párrafo de cola (7)** corre siempre: es un parser sin red.
+- **Ventas del día (9)** corre en la sesión del fake, con un día `complete` (una venta
+  anulada), uno `incomplete` y uno `deferred`. Ver abajo.
 - **Autenticación, Air Booking y Asientos (1–3)** usan Bargain Finder Max, revalidar o
   asientos, que el fake no simula: en fake se ven deshabilitados, con la razón. Lo mismo la
   **consola de comandos (8)**: el fake no simula `session.command()`.
