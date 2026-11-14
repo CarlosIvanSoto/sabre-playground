@@ -27,10 +27,41 @@ que no sale a la red:
   `50` está vacía y `AAAAAE` y `AAAAAF` quedan fuera de las colas para probar `place`.
   Prueba abrir la sesión, `count`,
   `access` en la 9 e `ignore` hasta el fin de cola. "Reiniciar el fake", arriba en la
-  página de colas, devuelve las colas a como estaban.
+  página de colas, devuelve las colas, las reservas y las ventas a como estaban.
+- **Reserva (4)** corre contra el mismo `fake.fetch`, que desde `sabre-client` 0.7.0 también
+  atiende al cliente REST: el token, Create, Get y Cancel Booking y Fulfill. La mesa de colas
+  y el censo leen las reservas por ahí. Ver [Qué simula el fake REST](#qué-simula-el-fake-rest).
 - **Párrafo de cola (7)** corre siempre: es un parser sin red.
-- **Autenticación, Air Booking, Asientos y Reserva (1–4)** usan REST, que no tiene
-  fixtures públicas: en fake se ven deshabilitados, con la razón.
+- **Autenticación, Air Booking y Asientos (1–3)** usan Bargain Finder Max, revalidar o
+  asientos, que el fake no simula: en fake se ven deshabilitados, con la razón. Lo mismo la
+  **consola de comandos (8)**: el fake no simula `session.command()`.
+
+### Qué simula el fake REST
+
+Lo arma `src/server/sabre/fake-queues.ts` (`fakeQueueOptions`), con datos sintéticos:
+
+- **Reservas sembradas**: `BBBBBA` sin boletos, para emitir; `BBBBBB` con el boleto
+  `0010000000001` en `TE`, para anular; y los PNR de las colas (`AAAAAA`–`AAAAAF`), sin
+  boletos. Las que crea `booking.create` se suman como `FAKEAA`, `FAKEAB`…
+- **Emisión y void**: `tickets.fulfill` emite un boleto `TE`, y una segunda emisión da
+  `BOOKING_FULFILLED`. `booking.cancel` con `VOID` deja el boleto en `TV`, lo devuelve en
+  `voidedTickets` y cancela la reserva; sobre una reserva sin boletos da
+  `NO_ITEMS_CANCELLED` y no cancela nada. `isTicketed` sigue en `true` después del void, como
+  en CERT.
+- **Desenlaces forzados**: en **Reserva**, el paso *Desenlaces del fake* elige el de la
+  siguiente emisión (`issued`, `partial`, cada `reason` de `SabreUncertainOutcomeError`, los
+  cuatro `DOWNLINE_SERVICE_ERROR` de CERT, `BOOKING_FULFILLED`, `PRICE_MISMATCH`) y el del
+  siguiente void (`voided` o un incierto). En un incierto se elige también si la operación se
+  hizo de verdad, para probar **Verificar**. El fake copia los desenlaces al crearse, así que
+  elegirlos **rearma el fake**: colas, reservas y ventas vuelven a como se sembraron, y hay que
+  cerrar la sesión antes.
+- **Ventas del día** (`session.reporting.dailySalesSummary`), para el PCC `TEST` del fake, con
+  fechas en UTC: hoy `complete` con una venta vigente y una anulada (`documentStatusCode: V`),
+  ayer `incomplete` con un documento fallido y antier `deferred`. Emitir o anular en el fake no
+  las cambia.
+- **Supuestos del fake**: un boleto por reserva; Get Booking devuelve una reserva mínima (sin
+  itinerario real, tarifas ni pasajeros); `targetPcc` no separa reservas (cualquier PCC ve las
+  mismas); no hay Bargain Finder Max, revalidar ni asientos.
 
 ## Arrancar contra CERT
 

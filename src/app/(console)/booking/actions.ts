@@ -5,11 +5,22 @@ import {
   bookingGetSchema,
   reservationHistorySchema,
 } from "@/lib/booking"
+import {
+  FAKE_BOOKING_OPEN,
+  FAKE_BOOKING_TICKETED,
+  FAKE_PCC,
+  FAKE_TICKET,
+  fakeTicketingSchema,
+  toFakeTicketing,
+} from "@/lib/fake-ticketing"
 import type { StepRun } from "@/lib/step/types"
 import { getEnvironment } from "@/server/config/environments"
-import { getSabre } from "@/server/sabre/clients"
+import { getSabre, resetQueueFake } from "@/server/sabre/clients"
 import { runStep } from "@/server/sabre/run-step"
-import { withRegisteredSession } from "@/server/sabre/sessions"
+import {
+  getSessionStatus,
+  withRegisteredSession,
+} from "@/server/sabre/sessions"
 import { inEnvironment } from "@/server/sabre/step-action"
 
 /**
@@ -90,5 +101,43 @@ export async function reservationHistory(
     return withRegisteredSession(id, (session, options) =>
       session.reservation.history(parsed.data.locator, options)
     )
+  })
+}
+
+/**
+ * Solo en fake (F16.6, #164): rearma el fake con el desenlace elegido para la siguiente emisión
+ * y el siguiente void. El fake de la 0.7.0 copia sus desenlaces al crearse, así que no hay otra
+ * forma: las colas, las reservas y las ventas vuelven a como se sembraron. Con una sesión
+ * abierta no, como `resetFakeQueues`: quedaría apuntando a un fake que ya no existe.
+ */
+export async function armFakeTicketing(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    if (id !== "fake") return { enabled: false, reason: "solo en el modo fake" }
+    const parsed = fakeTicketingSchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    if ((await getSessionStatus(id)).open) {
+      return {
+        enabled: false,
+        reason: "hay una sesión abierta en el fake: ciérrala primero",
+      }
+    }
+    const ticketing = toFakeTicketing(parsed.data)
+    return {
+      enabled: true,
+      step: await runStep(async () => {
+        resetQueueFake(ticketing)
+        return {
+          ticketing,
+          bookings: {
+            [FAKE_BOOKING_OPEN]: "sin boletos, para emitir",
+            [FAKE_BOOKING_TICKETED]: `con el boleto ${FAKE_TICKET} en TE, para anular`,
+          },
+          dailySalesPcc: FAKE_PCC,
+        }
+      }),
+    }
   })
 }

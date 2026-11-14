@@ -13,6 +13,7 @@ import {
   getBooking,
   reservationHistory,
 } from "@/app/(console)/booking/actions"
+import { FakeTicketingStep } from "@/components/booking/fake-ticketing-step"
 import { PnrHistoryView } from "@/components/booking/pnr-history"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useSessionStatus } from "@/components/session/use-session-status"
@@ -71,6 +72,7 @@ export function BookingFlow({
       />
       <HistoryStep initialLocator={initialConfirmationId} />
       {!environment.readOnly && <BookingCancelStep />}
+      {environment.id === "fake" && <FakeTicketingStep />}
     </>
   )
 }

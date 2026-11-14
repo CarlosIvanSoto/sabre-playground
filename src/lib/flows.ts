@@ -15,7 +15,8 @@ export const FAKE_COMMAND_REASON =
 
 /**
  * Qué cliente usa el flujo: `rest` (`Sabre`), `soap` (`SabreLegacy`) o `local` (sin red). En
- * fake solo corren `soap`, contra `createQueueFake`, y `local`.
+ * fake corren `soap` y `local`, y los `rest` con `fakeRest`: los que solo usan lo que el fake
+ * REST de la 0.7.0 simula (token, Create, Get y Cancel Booking, Fulfill).
  */
 export type FlowApi = "rest" | "soap" | "local"
 
@@ -35,6 +36,8 @@ export interface Flow {
   api: FlowApi
   /** Por qué no corre en fake, si es `soap` y el fake no lo simula. */
   fakeUnavailable?: string
+  /** Si es `rest` y el fake REST simula todo lo que usa. */
+  fakeRest?: boolean
 }
 
 export const FLOWS: Flow[] = [
@@ -87,6 +90,7 @@ export const FLOWS: Flow[] = [
     wiki: "wiki/proyectos/sabre-client/decisiones/gestion-de-reserva.md",
     phase: 2,
     api: "rest",
+    fakeRest: true,
   },
   {
     slug: "session",
@@ -141,7 +145,7 @@ export function getFlow(slug: string): Flow | undefined {
 
 /** Por qué REST no corre en fake. */
 export const FAKE_REST_REASON =
-  "el modo fake no tiene fixtures REST: sabre-client/testing solo trae colas"
+  "el fake REST de sabre-client 0.7.0 solo simula el token, Create, Get y Cancel Booking y Fulfill: no Bargain Finder Max, revalidar ni asientos"
 
 /** Por qué el flujo no corre en ese entorno, o `undefined` si corre. */
 export function flowUnavailable(
@@ -153,7 +157,7 @@ export function flowUnavailable(
     return environment.reason ?? "entorno deshabilitado"
   }
   if (environment.id === "fake") {
-    if (flow.api === "rest") return FAKE_REST_REASON
+    if (flow.api === "rest" && flow.fakeRest !== true) return FAKE_REST_REASON
     if (flow.fakeUnavailable !== undefined) return flow.fakeUnavailable
   }
   return undefined
