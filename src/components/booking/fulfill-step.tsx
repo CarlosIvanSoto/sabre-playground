@@ -47,6 +47,8 @@ export function FulfillStep({
   defaultTargetPcc,
   waitingFor,
   disabled = false,
+  onStart,
+  onOutcome,
   onDone,
 }: {
   confirmationId?: string
@@ -55,6 +57,10 @@ export function FulfillStep({
   /** Qué falta para poder emitir, si falta algo. */
   waitingFor?: string
   disabled?: boolean
+  /** Se pidió una emisión (ya confirmada). */
+  onStart?: () => void
+  /** Cómo terminó la emisión: emitió (`issued` o `partial`), quedó incierta o falló. */
+  onOutcome?: (outcome: "issued" | "uncertain" | "failed") => void
   /** Los boletos emitidos, o confirmados por Verificar, y su reserva. */
   onDone?: (tickets: TicketRow[], confirmationId: string) => void
 }) {
@@ -86,10 +92,16 @@ export function FulfillStep({
   const emit = () => {
     const input: FulfillInput = { confirmationId, targetPcc: pcc }
     setAttempt((n) => n + 1)
+    onStart?.()
     fulfill.execute(input, (run) => {
-      if (uncertainOf(run) !== undefined) setBlockedFor(confirmationId)
-      else if (run.enabled && run.step.ok) {
+      if (uncertainOf(run) !== undefined) {
+        setBlockedFor(confirmationId)
+        onOutcome?.("uncertain")
+      } else if (run.enabled && run.step.ok) {
+        onOutcome?.("issued")
         onDone?.(ticketsOf(run.step.result), confirmationId)
+      } else {
+        onOutcome?.("failed")
       }
     })
   }

@@ -6,6 +6,7 @@ import {
   fulfillGate,
   fulfillSchema,
   liveTicketsOf,
+  notVoidedOf,
   PROD_FULFILL_REASON,
   PROD_VOID_REASON,
   ticketsOf,
@@ -131,5 +132,32 @@ describe("voidedTicketsOf", () => {
   it("voidedTickets es una lista de strings", () => {
     assert.deepEqual(voidedTicketsOf({ voidedTickets: ["1", 2] }), ["1"])
     assert.deepEqual(voidedTicketsOf({}), [])
+  })
+})
+
+describe("notVoidedOf", () => {
+  it("vacío si todos los anulados están en TV", () => {
+    assert.deepEqual(
+      notVoidedOf(
+        {
+          isTicketed: true,
+          flightTickets: [{ number: "0010000000001", ticketStatusCode: "TV" }],
+        },
+        ["0010000000001"]
+      ),
+      []
+    )
+  })
+
+  it("los que siguen en TE o no aparecen", () => {
+    assert.deepEqual(
+      notVoidedOf(
+        {
+          flightTickets: [{ number: "0010000000001", ticketStatusCode: "TE" }],
+        },
+        ["0010000000001", "0010000000002"]
+      ),
+      ["0010000000001", "0010000000002"]
+    )
   })
 })

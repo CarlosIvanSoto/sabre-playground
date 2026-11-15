@@ -71,6 +71,39 @@ export function liveTicketsOf(booking: unknown): string[] {
     .map((ticket) => ticket.number)
 }
 
+/**
+ * De los boletos que se anularon, los que la reserva (Get Booking) **no** muestra en `TV`: siguen
+ * en `TE`, o ya no aparecen. Vacío quiere decir que el void quedó en el PNR (S8: se mira el
+ * `ticketStatusCode`, no `isTicketed`).
+ */
+export function notVoidedOf(
+  booking: unknown,
+  expected: readonly string[]
+): string[] {
+  const tickets = (booking as { flightTickets?: unknown } | undefined)
+    ?.flightTickets
+  const status = new Map<string, unknown>()
+  if (Array.isArray(tickets)) {
+    for (const ticket of tickets) {
+      if (typeof ticket === "object" && ticket !== null) {
+        const { number, ticketStatusCode } = ticket as {
+          number?: unknown
+          ticketStatusCode?: unknown
+        }
+        if (typeof number === "string") status.set(number, ticketStatusCode)
+      }
+    }
+  }
+  return expected.filter((number) => status.get(number) !== "TV")
+}
+
+/** Los `flightTickets` de una reserva (Get Booking), en lo que la UI muestra. */
+export function bookingTicketsOf(booking: unknown): TicketRow[] {
+  const tickets = (booking as { flightTickets?: unknown } | undefined)
+    ?.flightTickets
+  return ticketsOf({ tickets })
+}
+
 /** Los números de `voidedTickets` de un resultado de Cancel Booking. */
 export function voidedTicketsOf(result: unknown): string[] {
   const voided = (result as { voidedTickets?: unknown } | undefined)

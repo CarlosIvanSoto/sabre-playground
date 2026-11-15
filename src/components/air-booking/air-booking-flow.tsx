@@ -1,6 +1,6 @@
 "use client"
 
-import { useReducer, useState } from "react"
+import { useReducer } from "react"
 import {
   CleanupStep,
   CreateStep,
@@ -12,11 +12,14 @@ import { SearchStep } from "@/components/air-booking/search-step"
 import { SeatsStep } from "@/components/air-booking/seats-step"
 import { FulfillStep } from "@/components/booking/fulfill-step"
 import { useEnvironment } from "@/components/environment/environment-provider"
+import { hasNoFlights } from "@/lib/air-booking"
 import {
+  cleanupWaitingFor,
   hasLiveBooking,
   INITIAL_JOURNEY,
   journeyReducer,
 } from "@/lib/air-booking-journey"
+import { liveTicketsOf, notVoidedOf } from "@/lib/ticketing"
 
 /**
  * Flujo 2: Air Booking de punta a punta. Cada paso es un `StepPanel`. Lo que un paso le pasa
@@ -34,10 +37,6 @@ export function AirBookingFlow() {
   const { environment, options } = useEnvironment()
   const [journey, dispatch] = useReducer(journeyReducer, INITIAL_JOURNEY)
   const { generation, confirmationId } = journey
-  // Los boletos `TE` que dejó la emisión, por reserva: con alguno, Limpiar los anula (F16.3).
-  const [issued, setIssued] = useState<Record<string, string[]>>({})
-  // El PCC en el que se reservó cada localizador, para cancelarlo ahí.
-  const [pccOf, setPccOf] = useState<Record<string, string>>({})
 
   const live = hasLiveBooking(journey)
   const elsewhere =
@@ -117,17 +116,12 @@ export function AirBookingFlow() {
         seatPlan={journey.seatPlan}
         disabled={early}
         onStart={() => dispatch({ type: "create" })}
-        onCreated={(id, pcc) => {
-          if (id !== undefined) {
-            setPccOf((current) => ({ ...current, [id]: pcc }))
-          }
-          dispatch({ type: "created", confirmationId: id })
-        }}
+        onCreated={(id, pcc) =>
+          dispatch({ type: "created", confirmationId: id, targetPcc: pcc })
+        }
       />
       <ReadStep
-        targetPcc={
-          confirmationId === undefined ? "" : (pccOf[confirmationId] ?? "")
-        }
+        targetPcc={journey.targetPcc}
         key={`read-${generation.read}`}
         confirmationId={confirmationId}
         waitingFor={
@@ -139,9 +133,7 @@ export function AirBookingFlow() {
       <FulfillStep
         key={`fulfill-${confirmationId ?? "none"}-${environment.id}`}
         confirmationId={confirmationId}
-        defaultTargetPcc={
-          confirmationId === undefined ? undefined : pccOf[confirmationId]
-        }
+        defaultTargetPcc={journey.targetPcc}
         waitingFor={
           confirmationId === undefined
             ? "Reserva en el paso 4."
@@ -150,34 +142,47 @@ export function AirBookingFlow() {
               : undefined
         }
         disabled={late}
-        onDone={(tickets, id) =>
-          setIssued((current) => ({
-            ...current,
-            [id]: tickets
-              .filter((ticket) => ticket.ticketStatusCode === "TE")
-              .map((ticket) => ticket.number),
-          }))
+        onStart={() => dispatch({ type: "fulfill" })}
+        onOutcome={(outcome) => dispatch({ type: "fulfilled", outcome })}
+      />
+      <ReadStep
+        key={`tickets-${generation.ticketRead}`}
+        mode="tickets"
+        targetPcc={journey.targetPcc}
+        confirmationId={confirmationId}
+        waitingFor={
+          confirmationId === undefined
+            ? "Reserva en el paso 4."
+            : !journey.fulfillRequested
+              ? "Emite primero (es opcional: sin emisión, Limpiar cancela sin VOID)."
+              : journey.cancelled
+                ? "La reserva ya se canceló."
+                : undefined
+        }
+        disabled={late}
+        onRead={(ok, booking) =>
+          dispatch({
+            type: "ticketsRead",
+            ok,
+            liveTickets: ok ? liveTicketsOf(booking) : undefined,
+          })
         }
       />
       <CleanupStep
         key={`cleanup-${generation.cleanup}`}
         confirmationId={confirmationId}
-        liveTickets={
-          confirmationId === undefined ? [] : (issued[confirmationId] ?? [])
-        }
-        targetPcc={
-          confirmationId === undefined ? "" : (pccOf[confirmationId] ?? "")
-        }
+        waitingFor={cleanupWaitingFor(journey)}
+        liveTickets={journey.liveTickets}
+        targetPcc={journey.targetPcc}
         // Ya limpia: otro Cancel solo daría `NO_ITEMS_CANCELLED`.
         disabled={late || journey.cancelled}
         onCancelled={(ok) => dispatch({ type: "cancelled", ok })}
       />
       <ReadStep
-        targetPcc={
-          confirmationId === undefined ? "" : (pccOf[confirmationId] ?? "")
-        }
         key={`verify-${generation.verify}`}
-        final
+        mode="final"
+        voided={journey.liveTickets}
+        targetPcc={journey.targetPcc}
         confirmationId={confirmationId}
         waitingFor={
           confirmationId === undefined
@@ -187,8 +192,15 @@ export function AirBookingFlow() {
               : undefined
         }
         disabled={late}
-        onRead={(ok, noFlights) =>
-          dispatch({ type: "verified", ok, noFlights })
+        onRead={(ok, booking) =>
+          dispatch({
+            type: "verified",
+            ok,
+            noFlights: ok ? hasNoFlights(booking) : undefined,
+            notVoided: ok
+              ? notVoidedOf(booking, journey.liveTickets)
+              : undefined,
+          })
         }
       />
     </>
