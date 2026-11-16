@@ -13,7 +13,6 @@ import { useCensus } from "@/components/queue-census/census-provider"
 import { useStep } from "@/components/step/use-step"
 import { Button, buttonVariants } from "@/components/ui/button"
 import type { ParagraphTraits } from "@/lib/census-traits"
-import { FAKE_REST_REASON } from "@/lib/flows"
 import { addReason, bookingOf } from "@/lib/queue-census"
 
 /**
@@ -81,16 +80,6 @@ export function DeskCensus({
           count: total ?? 0,
           item: run.step.result as ParagraphTraits,
         })
-        if (environment.id === "fake") {
-          dispatch({
-            type: "booking",
-            queue: number,
-            position,
-            booking: null,
-            error: FAKE_REST_REASON,
-          })
-          return
-        }
         bookingStep.execute({ pnr: locator, pcc }, (booking) => {
           const result = bookingOf(booking)
           dispatch({

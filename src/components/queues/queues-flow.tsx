@@ -224,6 +224,8 @@ function FakeQueuesStep({ open }: { open: boolean }) {
           <code>AAAAAE</code> y <code>AAAAAF</code> quedan fuera de las colas,
           para <code>place</code>. En <code>queue.activity</code>, la 9 trae 27
           ignorados sembrados; las acciones del fake no cambian los contadores.
+          Reiniciar también devuelve las reservas y las ventas del fake a como
+          se sembraron, sin desenlaces forzados.
         </>
       }
       run={latest}

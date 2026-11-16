@@ -7,7 +7,7 @@ import {
   type QueueStep,
 } from "sabre-client"
 import { z } from "zod"
-import { FAKE_REST_REASON } from "@/lib/flows"
+import { FAKE_PCC } from "@/lib/fake-ticketing"
 import type { CensusStep } from "@/lib/queue-census"
 import { optionalPcc, queueAccessSchema, queueCountSchema } from "@/lib/queues"
 import type { StepRun } from "@/lib/step/types"
@@ -239,14 +239,15 @@ export async function censusBooking(
   return inEnvironment(environment, async (id) => {
     const parsed = bookingSchema.safeParse(input)
     if (!parsed.success) return INVALID
-    if (id === "fake") return { enabled: false, reason: FAKE_REST_REASON }
     const sabre = getSabre(id)
     if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
     const { pnr, pcc } = parsed.data
-    const config = getEnvironment(id)?.sabre
+    // En fake, el PCC de las credenciales del fake.
+    const config = id === "fake" ? undefined : getEnvironment(id)?.sabre
+    const authPcc = id === "fake" ? FAKE_PCC : config?.enabled ? config.pcc : ""
     const context: TraitContext = {
       now: new Date(),
-      workingPcc: pcc ?? (config?.enabled ? config.pcc : ""),
+      workingPcc: pcc ?? authPcc,
     }
     const step = await runStep(async (options) =>
       bookingTraits(

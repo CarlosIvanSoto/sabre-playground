@@ -64,7 +64,6 @@ import {
 import { buildCensusExport } from "@/lib/census-export"
 import { summarizeCensus } from "@/lib/census-summary"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
-import { FAKE_REST_REASON } from "@/lib/flows"
 import {
   bookingOf,
   CENSUS_RANGE,
@@ -230,16 +229,6 @@ function Census({ initialPcc }: { initialPcc: string }) {
     pnr: string,
     pcc: string
   ) => {
-    if (environment.id === "fake") {
-      dispatch({
-        type: "booking",
-        queue,
-        position,
-        booking: null,
-        error: FAKE_REST_REASON,
-      })
-      return
-    }
     const run = await call("booking.get", censusBooking, { pnr, pcc })
     const read = bookingOf(run)
     dispatch({

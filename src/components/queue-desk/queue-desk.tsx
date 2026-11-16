@@ -34,7 +34,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { FAKE_REST_REASON } from "@/lib/flows"
 import {
   bookingHref,
   countOf,
@@ -352,13 +351,9 @@ function Desk({ initialPcc }: { initialPcc: string }) {
         ? "En producción, primero el desbloqueo de abajo."
         : undefined
   const unlock = environment.readOnly && unlocked
-  /** Ver la reserva: REST, así que no en fake; y solo con un PNR en pantalla. */
+  /** Ver la reserva: solo con un PNR en pantalla. En fake lee las reservas sembradas. */
   const bookingReason =
-    environment.id === "fake"
-      ? `Ver reserva: ${FAKE_REST_REASON}.`
-      : desk.journey.current === undefined
-        ? "Sin PNR en pantalla."
-        : undefined
+    desk.journey.current === undefined ? "Sin PNR en pantalla." : undefined
   const openBooking = () => {
     const locator = desk.journey.current
     if (locator === undefined) return
@@ -390,8 +385,7 @@ function Desk({ initialPcc }: { initialPcc: string }) {
   const openHistory = () => {
     const locator = desk.journey.current
     if (locator === undefined) return
-    if (environment.id === "fake") dispatch({ type: "booking", locator })
-    else if (desk.booking !== locator || bookingStep.run === undefined) {
+    if (desk.booking !== locator || bookingStep.run === undefined) {
       openBooking()
     }
     runHistory(locator)
@@ -622,11 +616,7 @@ function Desk({ initialPcc }: { initialPcc: string }) {
       <BookingSheet
         locator={desk.booking}
         pcc={desk.pcc}
-        run={
-          environment.id === "fake"
-            ? { enabled: false, reason: `Ver reserva: ${FAKE_REST_REASON}.` }
-            : bookingStep.run
-        }
+        run={bookingStep.run}
         pending={bookingStep.pending}
         history={{
           run: historyOf === desk.booking ? historyStep.run : undefined,
