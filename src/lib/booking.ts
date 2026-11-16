@@ -44,6 +44,11 @@ export const bookingCancelSchema = z.object({
   confirmationId,
   targetPcc,
   retrieveBooking: z.boolean().default(false),
+  /**
+   * Anular los boletos en la misma llamada (`flightTicketOperation: 'VOID'`, F16.3). Irreversible.
+   * Solo si la reserva tiene boletos `TE`: sin boletos da `NO_ITEMS_CANCELLED` y no cancela nada.
+   */
+  voidTickets: z.boolean().default(false),
 })
 
 export type BookingCancelInput = z.input<typeof bookingCancelSchema>

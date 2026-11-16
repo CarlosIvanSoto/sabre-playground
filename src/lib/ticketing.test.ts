@@ -5,9 +5,14 @@ import {
   buildVerifyRequest,
   fulfillGate,
   fulfillSchema,
+  liveTicketsOf,
+  notVoidedOf,
   PROD_FULFILL_REASON,
+  PROD_VOID_REASON,
   ticketsOf,
   verifySchema,
+  voidedTicketsOf,
+  voidGate,
 } from "./ticketing.ts"
 
 /** La emisión de W4 (F16.2, #160). */
@@ -89,5 +94,70 @@ describe("ticketsOf", () => {
       [{ number: "1", ticketStatusCode: "TE" }]
     )
     assert.deepEqual(ticketsOf(undefined), [])
+  })
+})
+
+describe("voidGate", () => {
+  it("en producción se rechaza; en CERT y fake no", () => {
+    assert.deepEqual(voidGate("prod", true), {
+      ok: false,
+      reason: PROD_VOID_REASON,
+    })
+    assert.equal(voidGate("cert", false).ok, true)
+    assert.equal(voidGate("fake", undefined).ok, true)
+  })
+})
+
+describe("liveTicketsOf", () => {
+  it("solo los TE, aunque isTicketed siga en true", () => {
+    assert.deepEqual(
+      liveTicketsOf({
+        isTicketed: true,
+        flightTickets: [
+          { number: "0010000000001", ticketStatusCode: "TV" },
+          { number: "0010000000002", ticketStatusCode: "TE" },
+        ],
+      }),
+      ["0010000000002"]
+    )
+  })
+
+  it("sin boletos, nada", () => {
+    assert.deepEqual(liveTicketsOf({ isTicketed: true }), [])
+    assert.deepEqual(liveTicketsOf(undefined), [])
+  })
+})
+
+describe("voidedTicketsOf", () => {
+  it("voidedTickets es una lista de strings", () => {
+    assert.deepEqual(voidedTicketsOf({ voidedTickets: ["1", 2] }), ["1"])
+    assert.deepEqual(voidedTicketsOf({}), [])
+  })
+})
+
+describe("notVoidedOf", () => {
+  it("vacío si todos los anulados están en TV", () => {
+    assert.deepEqual(
+      notVoidedOf(
+        {
+          isTicketed: true,
+          flightTickets: [{ number: "0010000000001", ticketStatusCode: "TV" }],
+        },
+        ["0010000000001"]
+      ),
+      []
+    )
+  })
+
+  it("los que siguen en TE o no aparecen", () => {
+    assert.deepEqual(
+      notVoidedOf(
+        {
+          flightTickets: [{ number: "0010000000001", ticketStatusCode: "TE" }],
+        },
+        ["0010000000001", "0010000000002"]
+      ),
+      ["0010000000001", "0010000000002"]
+    )
   })
 })

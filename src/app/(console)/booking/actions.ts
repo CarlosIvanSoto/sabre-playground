@@ -20,6 +20,7 @@ import {
   fulfillGate,
   fulfillSchema,
   verifySchema,
+  voidGate,
 } from "@/lib/ticketing"
 import { getEnvironment } from "@/server/config/environments"
 import { getSabre, resetQueueFake } from "@/server/sabre/clients"
@@ -39,7 +40,8 @@ import { inEnvironment } from "@/server/sabre/step-action"
  * - Los dos aceptan `targetPcc` (cambio de contexto); sin él, el PCC de auth.
  * - `booking.cancel` es una escritura sin reintento, siempre con `cancelAll: true`. El SDK trata
  *   `NO_ITEMS_CANCELLED` como fallo. En producción no corre (solo lectura): la UI no lo ofrece y
- *   esta action lo rechaza igual.
+ *   esta action lo rechaza igual. Con `voidTickets` (F16.3) manda `flightTicketOperation: 'VOID'`
+ *   y anula los boletos en la misma llamada.
  *
  * - `reservation.history` (F12.3) es SOAP: corre en la sesión registrada del navegador, como las
  *   colas, y también en fake. Dentro de una cola, Sabre lo rechaza para otro PNR que el del AAA
@@ -85,12 +87,29 @@ export async function cancelBooking(
     if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
     const sabre = getSabre(id)
     if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
-    const { confirmationId, retrieveBooking, targetPcc } = parsed.data
+    const { confirmationId, retrieveBooking, targetPcc, voidTickets } =
+      parsed.data
+    if (voidTickets) {
+      // El void (F16.3) es irreversible y mueve dinero: la regla va acá, no solo en la UI.
+      const gate = voidGate(
+        id,
+        id === "fake" ? undefined : getEnvironment(id)?.readOnly
+      )
+      if (!gate.ok) return { enabled: false, reason: gate.reason }
+    }
     return {
       enabled: true,
       step: await runStep((options) =>
         sabre.client.booking.cancel(
-          { confirmationId, cancelAll: true, retrieveBooking, targetPcc },
+          {
+            confirmationId,
+            cancelAll: true,
+            retrieveBooking,
+            targetPcc,
+            // Con `cancelAll`, una sola llamada anula los boletos y cancela la reserva. Un
+            // incierto (`END_TRANSACTION_PROBLEM`, red, 5xx) lanza `SabreUncertainOutcomeError`.
+            ...(voidTickets ? { flightTicketOperation: "VOID" as const } : {}),
+          },
           options
         )
       ),

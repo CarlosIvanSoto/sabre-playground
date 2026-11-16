@@ -20,6 +20,8 @@ const LABELS: Record<JourneyStep, string> = {
   seats: "Asientos (opcional)",
   create: "Reservar",
   read: "Leer",
+  fulfill: "Emitir (opcional)",
+  ticketRead: "Leer boletos",
   cleanup: "Limpiar",
   verify: "Comprobar",
 }

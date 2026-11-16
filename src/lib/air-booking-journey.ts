@@ -7,6 +7,11 @@ import type { ConsoleEnvironmentId } from "@/lib/environment"
  * su panel se vacía (sube su `generation`, que es la `key` del panel).
  *
  * Vive en memoria del navegador (regla 7 del repo), y es puro: no llama a nada.
+ *
+ * Es el W4 de Bruno (F16.3): después de leer la reserva se emite (`tickets.fulfill`), se vuelve a
+ * leer para ver los boletos en el PNR, Limpiar los anula (`VOID`) junto con la reserva, y
+ * Comprobar mira que no queden vuelos y que esos boletos estén en `TV`. Emitir es opcional: sin
+ * emisión, Limpiar cancela como antes.
  */
 
 export const JOURNEY_STEPS = [
@@ -15,6 +20,8 @@ export const JOURNEY_STEPS = [
   "seats",
   "create",
   "read",
+  "fulfill",
+  "ticketRead",
   "cleanup",
   "verify",
 ] as const
@@ -37,10 +44,28 @@ export interface Journey {
   /** Sin decidir (`undefined`), con asientos, o saltado (`seats: []`). */
   seatPlan?: SeatPlan
   confirmationId?: string
+  /** El PCC en el que se reservó (vacío, el de auth): Get, Fulfill y Cancel corren ahí. */
+  targetPcc: string
   read: boolean
+  /**
+   * Si se pidió una emisión, haya salido bien, incierta o mal. Con una emisión pedida, Limpiar
+   * espera a que se lea la reserva otra vez: los boletos que anula salen del PNR.
+   */
+  fulfillRequested: boolean
+  /** Lo que devolvió Fulfill: `issued`/`partial`, `uncertain` o `failed`. */
+  fulfillOutcome?: "issued" | "uncertain" | "failed"
+  /** El Get después de emitir ya corrió. */
+  ticketRead: boolean
+  /** Los boletos `TE` del PNR, según el Get después de emitir. Limpiar los anula. */
+  liveTickets: string[]
   cancelled: boolean
-  /** Resultado de la comprobación final: `true` si Get Booking ya no trae vuelos. */
+  /**
+   * Resultado de la comprobación final: `true` si Get Booking ya no trae vuelos y los boletos que
+   * se anularon están en `TV`.
+   */
   verified?: boolean
+  /** Los boletos anulados que la comprobación final no vio en `TV`. */
+  notVoided?: string[]
   /** Pasos cuya última corrida falló. */
   failed: Partial<Record<JourneyStep, true>>
   generation: Record<JourneyStep, number>
@@ -59,10 +84,21 @@ export type JourneyAction =
   | { type: "seatsLoaded"; ok: boolean }
   | { type: "seatPlan"; plan: SeatPlan }
   | { type: "create" }
-  | { type: "created"; confirmationId?: string }
+  | { type: "created"; confirmationId?: string; targetPcc?: string }
   | { type: "read"; ok: boolean }
+  /** Arranca una emisión. */
+  | { type: "fulfill" }
+  | { type: "fulfilled"; outcome: "issued" | "uncertain" | "failed" }
+  /** El Get después de emitir: los boletos `TE` del PNR. */
+  | { type: "ticketsRead"; ok: boolean; liveTickets?: string[] }
   | { type: "cancelled"; ok: boolean }
-  | { type: "verified"; ok: boolean; noFlights?: boolean }
+  /** `notVoided`: los boletos anulados que no están en `TV` (vacío si todos lo están). */
+  | {
+      type: "verified"
+      ok: boolean
+      noFlights?: boolean
+      notVoided?: string[]
+    }
   /** Empezar de nuevo. */
   | { type: "reset" }
 
@@ -71,7 +107,11 @@ const zero = Object.fromEntries(
 ) as Record<JourneyStep, number>
 
 export const INITIAL_JOURNEY: Journey = {
+  targetPcc: "",
   read: false,
+  fulfillRequested: false,
+  ticketRead: false,
+  liveTickets: [],
   cancelled: false,
   failed: {},
   generation: zero,
@@ -94,13 +134,17 @@ function clearStep(state: Journey, step: JourneyStep): Journey {
     case "seats":
       return { ...next, seatPlan: undefined }
     case "create":
-      return { ...next, confirmationId: undefined }
+      return { ...next, confirmationId: undefined, targetPcc: "" }
     case "read":
       return { ...next, read: false }
+    case "fulfill":
+      return { ...next, fulfillRequested: false, fulfillOutcome: undefined }
+    case "ticketRead":
+      return { ...next, ticketRead: false, liveTickets: [] }
     case "cleanup":
       return { ...next, cancelled: false }
     case "verify":
-      return { ...next, verified: undefined }
+      return { ...next, verified: undefined, notVoided: undefined }
   }
 }
 
@@ -151,22 +195,62 @@ export function journeyReducer(state: Journey, action: JourneyAction): Journey {
       return {
         ...mark(state, "create", action.confirmationId !== undefined),
         confirmationId: action.confirmationId,
+        targetPcc: action.targetPcc ?? "",
       }
     case "read":
       return { ...mark(state, "read", action.ok), read: action.ok }
+    case "fulfill":
+      // Una emisión nueva deja sin efecto la lectura de boletos y lo que venía después.
+      return {
+        ...invalidateAfter(clearStep(state, "fulfill"), "fulfill"),
+        fulfillRequested: true,
+      }
+    case "fulfilled":
+      return {
+        ...mark(state, "fulfill", action.outcome !== "failed"),
+        fulfillOutcome: action.outcome,
+      }
+    case "ticketsRead": {
+      const next = invalidateAfter(
+        mark(state, "ticketRead", action.ok),
+        "ticketRead"
+      )
+      return {
+        ...next,
+        ticketRead: action.ok,
+        liveTickets: action.ok ? (action.liveTickets ?? []) : [],
+      }
+    }
     case "cancelled": {
       // Un Cancel nuevo deja sin efecto la comprobación anterior.
       const next = invalidateAfter(mark(state, "cleanup", action.ok), "cleanup")
       return { ...next, cancelled: action.ok }
     }
-    case "verified":
+    case "verified": {
+      const clean =
+        action.noFlights === true && (action.notVoided?.length ?? 0) === 0
       return {
-        ...mark(state, "verify", action.ok && action.noFlights === true),
-        verified: action.ok ? action.noFlights : undefined,
+        ...mark(state, "verify", action.ok && clean),
+        verified: action.ok ? clean : undefined,
+        notVoided: action.ok ? action.notVoided : undefined,
       }
+    }
     case "reset":
       return JOURNEY_STEPS.reduce(clearStep, state)
   }
+}
+
+/**
+ * Por qué Limpiar todavía no se puede correr, o `undefined` si se puede. Con una emisión pedida,
+ * primero se lee la reserva: los boletos que se anulan salen del PNR, no de la respuesta de
+ * Fulfill (así entra también un boleto que Fulfill dio por incierto y ya está en el PNR).
+ */
+export function cleanupWaitingFor(state: Journey): string | undefined {
+  if (state.confirmationId === undefined) return "Reserva en el paso 4."
+  if (state.fulfillRequested && !state.ticketRead) {
+    return "Se emitió: lee la reserva otra vez antes de limpiar, para anular los boletos que tenga."
+  }
+  return undefined
 }
 
 /**
@@ -215,12 +299,46 @@ export function stepStatus(
         : { status: "done", detail: state.confirmationId }
     case "read":
       return { status: state.read ? "done" : "pending" }
+    case "fulfill":
+      if (!state.fulfillRequested)
+        return { status: "skipped", detail: "opcional" }
+      switch (state.fulfillOutcome) {
+        case undefined:
+          return { status: "pending" }
+        case "issued":
+          return { status: "done" }
+        case "uncertain":
+          return { status: "failed", detail: "incierto: verificar" }
+        case "failed":
+          return { status: "failed" }
+      }
+      return { status: "pending" }
+    case "ticketRead":
+      if (!state.fulfillRequested) return { status: "skipped" }
+      return state.ticketRead
+        ? {
+            status: "done",
+            detail:
+              state.liveTickets.length === 0
+                ? "sin boletos TE"
+                : `${state.liveTickets.length} TE`,
+          }
+        : { status: "pending" }
     case "cleanup":
       return { status: state.cancelled ? "done" : "pending" }
     case "verify":
       if (state.verified === undefined) return { status: "pending" }
-      return state.verified
-        ? { status: "done", detail: "sin vuelos" }
-        : { status: "failed", detail: "con vuelos" }
+      if (state.verified) {
+        return {
+          status: "done",
+          detail:
+            state.liveTickets.length === 0 ? "sin vuelos" : "sin vuelos, TV",
+        }
+      }
+      return {
+        status: "failed",
+        detail:
+          (state.notVoided?.length ?? 0) > 0 ? "boletos sin TV" : "con vuelos",
+      }
   }
 }

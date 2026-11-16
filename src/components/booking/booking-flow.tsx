@@ -14,7 +14,7 @@ import {
   reservationHistory,
 } from "@/app/(console)/booking/actions"
 import { FakeTicketingStep } from "@/components/booking/fake-ticketing-step"
-import { FulfillStep } from "@/components/booking/fulfill-step"
+import { FulfillStep, VerifyPanel } from "@/components/booking/fulfill-step"
 import { PnrHistoryView } from "@/components/booking/pnr-history"
 import { useEnvironment } from "@/components/environment/environment-provider"
 import { useSessionStatus } from "@/components/session/use-session-status"
@@ -49,6 +49,11 @@ import {
   reservationHistorySchema,
 } from "@/lib/booking"
 import { uncertainOf } from "@/lib/step/uncertain"
+import {
+  liveTicketsOf,
+  VERIFY_STATUS_TEXT,
+  VOID_VERIFY_STATUS_TEXT,
+} from "@/lib/ticketing"
 
 /**
  * Flujo 4: leer o cancelar una reserva por su localizador, y ver su historial
@@ -65,15 +70,39 @@ export function BookingFlow({
   initialTargetPcc?: string
 }) {
   const { environment } = useEnvironment()
+  // Los boletos vigentes (`TE`) de cada reserva, según el último Get o la última emisión. El void
+  // solo se ofrece si hay alguno (F16.3). Vive en memoria, como el historial.
+  const [live, setLive] = useState<Record<string, string[]>>({})
+  const note = (confirmationId: string, tickets: string[]) =>
+    setLive((current) => ({ ...current, [confirmationId]: tickets }))
   return (
     <>
       <BookingGetStep
         initialConfirmationId={initialConfirmationId}
         initialTargetPcc={initialTargetPcc}
+        onRead={note}
       />
       <HistoryStep initialLocator={initialConfirmationId} />
-      {!environment.readOnly && <FulfillStep key={environment.id} />}
-      {!environment.readOnly && <BookingCancelStep />}
+      {!environment.readOnly && (
+        <FulfillStep
+          key={environment.id}
+          onDone={(tickets, confirmationId) =>
+            note(
+              confirmationId,
+              tickets
+                .filter((ticket) => ticket.ticketStatusCode === "TE")
+                .map((ticket) => ticket.number)
+            )
+          }
+        />
+      )}
+      {!environment.readOnly && (
+        <BookingCancelStep
+          key={environment.id}
+          liveTickets={(confirmationId) => live[confirmationId] ?? []}
+          onCancelled={(confirmationId) => note(confirmationId, [])}
+        />
+      )}
       {environment.id === "fake" && <FakeTicketingStep />}
     </>
   )
@@ -159,9 +188,12 @@ function HistoryStep({ initialLocator }: { initialLocator?: string }) {
 function BookingGetStep({
   initialConfirmationId,
   initialTargetPcc,
+  onRead,
 }: {
   initialConfirmationId?: string
   initialTargetPcc?: string
+  /** Los boletos `TE` de la reserva leída. */
+  onRead?: (confirmationId: string, liveTickets: string[]) => void
 }) {
   const { run, pending, execute } = useStep("booking.get", getBooking)
   const form = useForm<BookingGetInput>({
@@ -187,7 +219,16 @@ function BookingGetStep({
       pending={pending}
       form={
         <form
-          onSubmit={form.handleSubmit((input) => execute(input))}
+          onSubmit={form.handleSubmit((input) =>
+            execute(input, (result) => {
+              if (result.enabled && result.step.ok) {
+                onRead?.(
+                  input.confirmationId.trim().toUpperCase(),
+                  liveTicketsOf(result.step.result)
+                )
+              }
+            })
+          )}
           className="flex flex-col gap-4"
         >
           <Field data-invalid={errors.confirmationId !== undefined}>
@@ -229,15 +270,29 @@ function BookingGetStep({
   )
 }
 
-function BookingCancelStep() {
+/**
+ * `booking.cancel` con `cancelAll`. Si la reserva tiene boletos `TE` (por el último Get o la
+ * última emisión), ofrece anularlos en la misma llamada (`flightTicketOperation: 'VOID'`,
+ * F16.3), con una confirmación que dice que es irreversible. Un incierto se verifica con
+ * `tickets.verify`, sin reintentar. El paso no aparece en producción, y la action rechaza el
+ * void ahí igual.
+ */
+function BookingCancelStep({
+  liveTickets,
+  onCancelled,
+}: {
+  liveTickets: (confirmationId: string) => string[]
+  onCancelled: (confirmationId: string) => void
+}) {
   const { environment } = useEnvironment()
   const { run, pending, execute } = useStep("booking.cancel", cancelBooking)
   const form = useForm<BookingCancelInput>({
     resolver: zodResolver(bookingCancelSchema),
     defaultValues: {
       confirmationId: MISSING_LOCATOR,
-      targetPcc: "",
+      targetPcc: environment.ticketingPcc ?? "",
       retrieveBooking: false,
+      voidTickets: false,
     },
   })
   const errors = form.formState.errors
@@ -245,26 +300,38 @@ function BookingCancelStep() {
   // verifica antes con booking.get. El StepPanel muestra el incierto aparte del error.
   const uncertain = uncertainOf(run)
   const locator = form.watch("confirmationId").trim().toUpperCase()
-  const blocked =
-    uncertain !== undefined &&
-    (uncertain.confirmationId === undefined ||
-      uncertain.confirmationId.toUpperCase() === locator)
+  const [blockedFor, setBlockedFor] = useState<string>()
+  const blocked = blockedFor !== undefined && blockedFor === locator
+  const tickets = liveTickets(locator)
+  const canVoid = tickets.length > 0
+  const voiding = canVoid && form.watch("voidTickets") === true
+  const [attempt, setAttempt] = useState(0)
   // Lo validado, esperando la confirmación del diálogo.
   const [pendingInput, setPendingInput] = useState<BookingCancelInput>()
 
   const confirm = () => {
-    if (pendingInput !== undefined) execute(pendingInput)
+    if (pendingInput !== undefined) {
+      const input = { ...pendingInput, voidTickets: voiding }
+      const id = input.confirmationId.trim().toUpperCase()
+      setAttempt((n) => n + 1)
+      execute(input, (result) => {
+        if (uncertainOf(result) !== undefined) setBlockedFor(id)
+        else if (result.enabled && result.step.ok) onCancelled(id)
+      })
+    }
     setPendingInput(undefined)
   }
 
-  return (
+  const panel = (
     <StepPanel
       title="booking.cancel"
       description={
         <>
           Cancela todos los segmentos (<code>cancelAll</code>), sin reintento.
           Si no se canceló nada, el SDK lanza <code>NO_ITEMS_CANCELLED</code>.
-          No aparece en producción.
+          Si la reserva tiene boletos <code>TE</code> (léela antes con{" "}
+          <code>booking.get</code>), puede anularlos en la misma llamada (
+          <code>VOID</code>). No aparece en producción.
         </>
       }
       run={run}
@@ -305,17 +372,36 @@ function BookingCancelStep() {
               </Field>
             )}
           />
+          {canVoid && (
+            <Controller
+              control={form.control}
+              name="voidTickets"
+              render={({ field }) => (
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="cancel-voidTickets"
+                    checked={field.value ?? false}
+                    onCheckedChange={field.onChange}
+                  />
+                  <FieldLabel htmlFor="cancel-voidTickets">
+                    Anular los boletos (VOID):{" "}
+                    <span className="font-mono">{tickets.join(", ")}</span>
+                  </FieldLabel>
+                </Field>
+              )}
+            />
+          )}
           <Button
             type="submit"
             variant="destructive"
             disabled={pending || blocked}
           >
-            Cancelar reserva
+            {voiding ? "Cancelar y anular boletos" : "Cancelar reserva"}
           </Button>
           {blocked && (
             <FieldDescription>
-              El último intento quedó incierto: verifica la reserva con{" "}
-              <code>booking.get</code> antes de volver a cancelar.
+              El último intento quedó incierto: verifica antes de volver a
+              cancelar.
             </FieldDescription>
           )}
           <AlertDialog
@@ -326,8 +412,14 @@ function BookingCancelStep() {
           >
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>¿Cancelar la reserva?</AlertDialogTitle>
+                <AlertDialogTitle>
+                  {voiding
+                    ? "¿Anular los boletos y cancelar la reserva?"
+                    : "¿Cancelar la reserva?"}
+                </AlertDialogTitle>
                 <AlertDialogDescription>
+                  {voiding &&
+                    `Se anulan los boletos ${tickets.join(", ")}: el void es irreversible. `}
                   Se cancelan todos los segmentos de{" "}
                   <code className="font-mono">
                     {pendingInput?.confirmationId.trim().toUpperCase()}
@@ -341,7 +433,7 @@ function BookingCancelStep() {
               <AlertDialogFooter>
                 <AlertDialogCancel>Volver</AlertDialogCancel>
                 <AlertDialogAction variant="destructive" onClick={confirm}>
-                  Cancelar reserva
+                  {voiding ? "Anular y cancelar" : "Cancelar reserva"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -349,6 +441,31 @@ function BookingCancelStep() {
         </form>
       }
     />
+  )
+  return (
+    <>
+      {panel}
+      {uncertain !== undefined && (
+        <VerifyPanel
+          key={attempt}
+          uncertain={uncertain}
+          confirmationId={uncertain.confirmationId ?? blockedFor ?? locator}
+          targetPcc={form.getValues("targetPcc")?.trim().toUpperCase() ?? ""}
+          statusText={
+            uncertain.operation === "booking.cancel"
+              ? VOID_VERIFY_STATUS_TEXT
+              : VERIFY_STATUS_TEXT
+          }
+          onVerified={(status) => {
+            // Sin boletos vigentes, el void se hizo; con boletos, no: se puede volver a pedir,
+            // con su confirmación.
+            const id = uncertain.confirmationId ?? blockedFor ?? locator
+            if (status === "notFound") onCancelled(id)
+            setBlockedFor(undefined)
+          }}
+        />
+      )}
+    </>
   )
 }
 
