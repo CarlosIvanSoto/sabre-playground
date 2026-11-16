@@ -4,6 +4,7 @@ import type { GetSeatsResponse } from "sabre-client"
 import { getSeatsForItinerary } from "@/app/(console)/air-booking/actions"
 import { ItineraryBrief } from "@/components/air-booking/itinerary-list"
 import { SeatMapView } from "@/components/seats/seat-map"
+import { ChosenSeatsDetail, SeatRiskAlert } from "@/components/seats/seat-risk"
 import { StepPanel } from "@/components/step/step-panel"
 import { useStep } from "@/components/step/use-step"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,8 @@ import {
  * elige un asiento por vuelo para el primer viajero, o se sigue sin asiento.
  *
  * En CERT el mapa no es confiable (Q-071): un asiento libre acá puede estar ocupado en el host,
- * y entonces Create falla entero (`AUTH-176`) sin dejar PNR.
+ * y entonces Create falla entero sin dejar PNR. Lo mismo pasa con un asiento de pago, preferente
+ * o restringido (F16.7): el mapa los marca y el paso avisa si se elige uno.
  */
 export function SeatsStep({
   revalidated,
@@ -123,6 +125,8 @@ export function SeatsStep({
               </span>
             )}
           </div>
+          <ChosenSeatsDetail seats={seats} availability={plan?.availability} />
+          <SeatRiskAlert seats={seats} availability={plan?.availability} />
           <Button
             variant="outline"
             onClick={() => onPlan({ seats: [] })}
