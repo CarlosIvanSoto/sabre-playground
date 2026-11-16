@@ -7,6 +7,7 @@ import { cancelBooking, getBooking } from "@/app/(console)/booking/actions"
 import { ItineraryBrief } from "@/components/air-booking/itinerary-list"
 import { TicketsTable, VerifyPanel } from "@/components/booking/fulfill-step"
 import { useEnvironment } from "@/components/environment/environment-provider"
+import { SeatRiskAlert } from "@/components/seats/seat-risk"
 import { StepPanel } from "@/components/step/step-panel"
 import { useStep } from "@/components/step/use-step"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -140,6 +141,7 @@ export function CreateStep({
                     .join(" · ")}
             </dd>
           </dl>
+          <SeatRiskAlert seats={seats} availability={seatPlan?.availability} />
           <Field>
             <FieldLabel htmlFor="create-targetPcc">
               PCC de la reserva (targetPcc)

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ConsoleEnvironmentId } from "@/lib/environment"
+import { hostSeatMapOf } from "@/lib/seat-marks"
 import { fileBase } from "@/lib/step/file-name"
 import type {
   LogLine,
@@ -490,6 +491,7 @@ export function UncertainAlert({ outcome }: { outcome: UncertainOutcome }) {
 
 function ErrorView({ error, name }: { error: StepError; name: string }) {
   const { warnings, errors, tickets, ...fields } = error
+  const hostSeatMap = hostSeatMapOf(error)
   return (
     <div className="flex flex-col gap-3">
       <Fields
@@ -506,6 +508,14 @@ function ErrorView({ error, name }: { error: StepError; name: string }) {
       {errors !== undefined && errors.length > 0 && (
         <Section title="errors">
           <Json value={errors} filename={`${name}.error.errors.json`} />
+        </Section>
+      )}
+      {hostSeatMap !== undefined && (
+        // F16.7: el rechazo de AirSeatLLSRQ en Create trae el mapa del host en una sola línea.
+        <Section title="mapa del host (AirSeatLLSRQ), un renglón por coma">
+          <pre className="bg-muted overflow-x-auto rounded-md p-2 font-mono text-xs">
+            {hostSeatMap}
+          </pre>
         </Section>
       )}
       {tickets !== undefined && tickets.length > 0 && (

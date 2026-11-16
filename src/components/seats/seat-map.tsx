@@ -1,6 +1,7 @@
 import type {
   GetSeatsResponse,
   Seat,
+  SeatAvailabilityResponse,
   SeatCabinCompartment,
   SeatSegmentRs,
 } from "sabre-client"
@@ -14,11 +15,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  characteristicText,
+  SEAT_MARK_SYMBOL,
+  SEAT_MARK_TEXT,
+  seatMarks,
+  seatPrices,
+} from "@/lib/seat-marks"
 
 /**
  * El mapa de asientos de `air.getSeats` como una tabla simple: una por cabina, filas por
  * número de fila y columnas por letra. Cada celda trae el `occupationStatusCode` tal cual
- * (PADIS 9865) y `$` si el asiento tiene precio.
+ * (PADIS 9865) y las marcas de `seat-marks` (F16.7): `$` de pago, `P` preferente y `R`
+ * restringido. El `title` de la celda lista todas sus `characteristics` y el precio.
  *
  * Con `onPick` (F3.3), los asientos libres se pueden elegir: uno por segmento, y `picked` dice
  * cuál está elegido en cada uno (`segmentRef` → número de asiento).
@@ -41,9 +50,11 @@ export function SeatMapView({
     <div className="flex flex-col gap-4">
       <p className="text-muted-foreground text-xs">
         Cada celda: <code>occupationStatusCode</code> (PADIS 9865:{" "}
-        <code>F</code> libre, <code>O</code> ocupado). <code>$</code>: con
-        precio. <code>—</code>: no existe. En CERT el estado no refleja la
-        ocupación real.
+        <code>F</code> libre, <code>O</code> ocupado). Marcas: <code>$</code> de
+        pago, <code>P</code> preferente (<code>O</code>), <code>R</code>{" "}
+        restringido (<code>1</code>): por número, Create puede fallar con ellas.{" "}
+        <code>—</code>: no existe. Pasa el cursor sobre un asiento para ver sus
+        características. En CERT el estado no refleja la ocupación real.
         {onPick !== undefined && " Clic en un asiento libre para elegirlo."}
       </p>
       {response.seatMaps.map((map) => {
@@ -62,6 +73,7 @@ export function SeatMapView({
                 // biome-ignore lint/suspicious/noArrayIndexKey: ver arriba
                 key={index}
                 cabin={cabin}
+                response={response}
                 picked={picked?.[map.segmentRef]}
                 onPick={
                   onPick === undefined
@@ -92,10 +104,12 @@ function segmentLabel(segment: SeatSegmentRs | undefined, ref: string) {
 
 function CabinTable({
   cabin,
+  response,
   picked,
   onPick,
 }: {
   cabin: SeatCabinCompartment
+  response: SeatAvailabilityResponse
   picked?: string
   onPick?: (seat: string) => void
 }) {
@@ -154,6 +168,8 @@ function CabinTable({
                     <SeatCell
                       key={column}
                       seat={seats.get(column)}
+                      number={number}
+                      response={response}
                       picked={picked === number}
                       onPick={
                         onPick === undefined ? undefined : () => onPick(number)
@@ -172,10 +188,14 @@ function CabinTable({
 
 function SeatCell({
   seat,
+  number,
+  response,
   picked = false,
   onPick,
 }: {
   seat: Seat | undefined
+  number: string
+  response: SeatAvailabilityResponse
   picked?: boolean
   onPick?: () => void
 }) {
@@ -187,14 +207,18 @@ function SeatCell({
     )
   }
   const status = seat.occupationStatusCode ?? "?"
-  const priced = (seat.offerItemRefIds?.length ?? 0) > 0
-  const title = (seat.characteristics ?? [])
-    .map((c) => c.description ?? c.code)
-    .join(", ")
+  const marks = seatMarks(seat)
+  const prices = seatPrices(seat, response)
+  const title = [
+    `${number} ${status}`,
+    ...marks.map((mark) => SEAT_MARK_TEXT[mark]),
+    ...prices,
+    ...(seat.characteristics ?? []).map(characteristicText),
+  ].join("\n")
   const label = (
     <>
       {status}
-      {priced && "$"}
+      {marks.map((mark) => SEAT_MARK_SYMBOL[mark])}
       {seat.isOperative === false && "!"}
     </>
   )
@@ -203,9 +227,11 @@ function SeatCell({
     <TableCell
       title={title}
       className={
-        status === "F"
-          ? "text-center font-mono text-xs"
-          : "bg-muted text-muted-foreground text-center font-mono text-xs"
+        status !== "F"
+          ? "bg-muted text-muted-foreground text-center font-mono text-xs"
+          : marks.length > 0
+            ? "bg-amber-100 text-center font-mono text-xs dark:bg-amber-950"
+            : "text-center font-mono text-xs"
       }
     >
       {onPick !== undefined && free ? (
