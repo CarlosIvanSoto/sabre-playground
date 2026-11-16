@@ -14,6 +14,13 @@ import {
   toFakeTicketing,
 } from "@/lib/fake-ticketing"
 import type { StepRun } from "@/lib/step/types"
+import {
+  buildFulfillRequest,
+  buildVerifyRequest,
+  fulfillGate,
+  fulfillSchema,
+  verifySchema,
+} from "@/lib/ticketing"
 import { getEnvironment } from "@/server/config/environments"
 import { getSabre, resetQueueFake } from "@/server/sabre/clients"
 import { runStep } from "@/server/sabre/run-step"
@@ -86,6 +93,61 @@ export async function cancelBooking(
           { confirmationId, cancelAll: true, retrieveBooking, targetPcc },
           options
         )
+      ),
+    }
+  })
+}
+
+/**
+ * W4 (F16.2, #160): `tickets.fulfill` con la receta de S8 (`emision-de-boletos`). Mueve dinero:
+ * en producción se rechaza **acá**, antes de llamar a Sabre, aunque la UI no lo ofrezca. El SDK
+ * no la reintenta nunca, y la consola tampoco: ante un `SabreUncertainOutcomeError` se verifica
+ * con `verifyTickets`.
+ */
+export async function fulfillTickets(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const gate = fulfillGate(
+      id,
+      id === "fake" ? undefined : getEnvironment(id)?.readOnly
+    )
+    if (!gate.ok) return { enabled: false, reason: gate.reason }
+    const parsed = fulfillSchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    const sabre = getSabre(id)
+    if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
+    const request = buildFulfillRequest(parsed.data)
+    return {
+      enabled: true,
+      step: await runStep((options) =>
+        sabre.client.tickets.fulfill(request, options)
+      ),
+    }
+  })
+}
+
+/**
+ * `tickets.verify` (ADR-031): un Get Booking que dice si la emisión se hizo, con
+ * `ticketStatusCode` y no con `isTicketed`. Es lectura: corre en cualquier entorno. Con los
+ * `tickets` del incierto como `expectedTickets`, distingue `notCommitted` (existen, no se vuelve
+ * a emitir) de `notFound`.
+ */
+export async function verifyTickets(
+  environment: unknown,
+  input: unknown
+): Promise<StepRun> {
+  return inEnvironment(environment, async (id) => {
+    const parsed = verifySchema.safeParse(input)
+    if (!parsed.success) return { enabled: false, reason: "entrada inválida" }
+    const sabre = getSabre(id)
+    if (!sabre.enabled) return { enabled: false, reason: sabre.reason }
+    const request = buildVerifyRequest(parsed.data)
+    return {
+      enabled: true,
+      step: await runStep((options) =>
+        sabre.client.tickets.verify(request, options)
       ),
     }
   })

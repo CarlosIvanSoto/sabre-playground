@@ -20,6 +20,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
 import {
   Table,
   TableBody,
@@ -63,6 +65,8 @@ export function CreateStep({
 }) {
   const { environment } = useEnvironment()
   const { run, pending, execute } = useStep("booking.create", createBooking)
+  // El PCC IATA de emisión, para que la reserva se pueda emitir después (F16.2).
+  const [targetPcc, setTargetPcc] = useState(environment.ticketingPcc ?? "")
   const seats = seatPlan?.seats ?? []
   const names = syntheticTravelers(travelers).map(
     (traveler) => `${traveler.surname}/${traveler.givenName}`
@@ -76,6 +80,7 @@ export function CreateStep({
       travelers,
       seats,
       seatAvailability: seats.length > 0 ? seatPlan?.availability : undefined,
+      targetPcc: targetPcc.trim().toUpperCase(),
     }
     onStart()
     execute(input, (result) =>
@@ -93,9 +98,10 @@ export function CreateStep({
       description={
         <>
           Reserva por el camino ATPCO con <code>buildBookingFlightDetails</code>
-          , en el PCC de auth. Viajeros y contacto sintéticos. Es una escritura:
-          ni el SDK ni la consola la reintentan. Si falla, el error se ve tal
-          cual en la pestaña Error.
+          , en el PCC de abajo (vacío, el de auth). Viajeros y contacto
+          sintéticos, con el DK de diez ceros y Secure Flight, lo que pide un
+          PCC IATA para emitir. Es una escritura: ni el SDK ni la consola la
+          reintentan. Si falla, el error se ve tal cual en la pestaña Error.
         </>
       }
       run={run}
@@ -125,6 +131,20 @@ export function CreateStep({
                     .join(" · ")}
             </dd>
           </dl>
+          <Field>
+            <FieldLabel htmlFor="create-targetPcc">
+              PCC de la reserva (targetPcc)
+            </FieldLabel>
+            <Input
+              id="create-targetPcc"
+              className="font-mono uppercase"
+              value={targetPcc}
+              onChange={(event) => setTargetPcc(event.target.value)}
+            />
+            <FieldDescription>
+              Para emitir, el PCC IATA. Vacío, el de auth.
+            </FieldDescription>
+          </Field>
           <Button
             onClick={create}
             disabled={

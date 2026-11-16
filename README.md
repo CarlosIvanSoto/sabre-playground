@@ -80,6 +80,7 @@ Llena las variables `SABRE_CERT_*` y reinicia `pnpm dev`. `.env` está en
 | `SABRE_CERT_DOMAIN` | `AA` por defecto. |
 | `SABRE_CERT_PASSWORD` | La contraseña del EPR. |
 | `SABRE_CERT_CLIENT_ID`, `SABRE_CERT_CLIENT_SECRET` | Obligatorios con `v3`. Con `v2`, los dos o ninguno. |
+| `SABRE_CERT_TICKETING_PCC` | Opcional. El PCC IATA en el que se reserva y se emite (W4). La consola lo propone como `targetPcc` en Create Booking y Fulfill. No es una credencial. |
 
 Un solo juego de credenciales por entorno sirve para REST (`Sabre`) y SOAP
 (`SabreLegacy`). Si falta algo o algo es inválido, el entorno queda deshabilitado en el
@@ -90,6 +91,9 @@ una.
 
 Las mismas variables con prefijo `SABRE_PROD_*`, más `SABRE_PROD_ENABLED=true`. Sin esa
 bandera, producción no aparece aunque haya credenciales.
+
+En producción no se emite ni se anula: la UI no lo ofrece y las server actions lo rechazan
+antes de llamar a Sabre. `SABRE_PROD_TICKETING_PCC` no se lee.
 
 ## Reglas de seguridad
 
