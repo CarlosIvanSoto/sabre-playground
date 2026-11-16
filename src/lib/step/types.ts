@@ -47,6 +47,18 @@ export interface StepError {
   kind?: string
   warnings?: unknown[]
   errors?: unknown[]
+  /** `SabreUncertainOutcomeError` (ADR-031): por qué no se sabe si se hizo. */
+  reason?: string
+  /** `SabreUncertainOutcomeError`: `tickets.fulfill` o `booking.cancel`. */
+  operation?: string
+  /** `SabreUncertainOutcomeError`: el localizador. */
+  confirmationId?: string
+  /** `SabreUncertainOutcomeError`: los boletos que Sabre alcanzó a devolver. */
+  tickets?: {
+    number: string
+    ticketStatusCode?: string
+    isCommitted?: boolean
+  }[]
 }
 
 export interface StepResult<T = unknown> {

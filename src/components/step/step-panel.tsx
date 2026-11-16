@@ -1,6 +1,6 @@
 "use client"
 
-import { CircleAlert, Play } from "lucide-react"
+import { CircleAlert, CircleHelp, Play } from "lucide-react"
 import { type ReactNode, useState } from "react"
 import { JsonTree } from "@/components/custom/json-tree"
 import { EnvironmentBadge } from "@/components/environment/environment-badge"
@@ -42,6 +42,11 @@ import type {
   StepResult,
   StepRun,
 } from "@/lib/step/types"
+import {
+  UNCERTAIN_ADVICE,
+  type UncertainOutcome,
+  uncertainOfError,
+} from "@/lib/step/uncertain"
 
 type Tab = "result" | "raw" | "error" | "log"
 
@@ -191,6 +196,7 @@ function StepTabs({
     (step.error === undefined ? 0 : 1) +
     (step.warnings?.length ?? 0) +
     (step.partialErrors?.length ?? 0)
+  const uncertain = uncertainOfError(step.error)
   const initial: Tab = step.ok ? "result" : "error"
   const [tab, setTab] = useState<Tab>(initial)
   // Con un paso nuevo se vuelve a la pestaña que le corresponde.
@@ -214,7 +220,11 @@ function StepTabs({
             Error
             {issues > 0 && (
               <Badge
-                variant={step.error === undefined ? "secondary" : "destructive"}
+                variant={
+                  step.error === undefined || uncertain !== undefined
+                    ? "secondary"
+                    : "destructive"
+                }
               >
                 {issues}
               </Badge>
@@ -234,7 +244,11 @@ function StepTabs({
               <Json value={step.result} filename={`${name}.result.json`} />
             </div>
           ) : (
-            <Nothing>El SDK lanzó un error: no hay resultado.</Nothing>
+            <Nothing>
+              {uncertain === undefined
+                ? "El SDK lanzó un error: no hay resultado."
+                : "Desenlace incierto: no hay resultado. Mira la pestaña Error."}
+            </Nothing>
           )}
         </TabsContent>
         <TabsContent value="raw">
@@ -245,6 +259,9 @@ function StepTabs({
             <Nothing>Sin error ni avisos.</Nothing>
           ) : (
             <div className="flex flex-col gap-4">
+              {uncertain !== undefined && (
+                <UncertainAlert outcome={uncertain} />
+              )}
               {step.error !== undefined && (
                 <ErrorView error={step.error} name={name} />
               )}
@@ -286,6 +303,7 @@ function StepSummary({
   step: StepResult
   environment?: ConsoleEnvironmentId
 }) {
+  const uncertain = uncertainOfError(step.error)
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       {environment !== undefined && (
@@ -293,12 +311,14 @@ function StepSummary({
       )}
       {step.ok ? (
         <Badge>ok</Badge>
+      ) : uncertain !== undefined ? (
+        <Badge variant="secondary">desenlace incierto</Badge>
       ) : (
         <Badge variant="destructive">{step.error?.class ?? "error"}</Badge>
       )}
-      {step.error?.code !== undefined && (
+      {(uncertain?.reason ?? step.error?.code) !== undefined && (
         <Badge variant="outline" className="font-mono">
-          {step.error.code}
+          {uncertain?.reason ?? step.error?.code}
         </Badge>
       )}
       <span className="text-muted-foreground">{step.durationMs} ms</span>
@@ -426,8 +446,50 @@ function RawView({ raw, name }: { raw: RawResponse; name: string }) {
   )
 }
 
+/**
+ * Un `SabreUncertainOutcomeError` (ADR-031): no es un error, puede haberse hecho. Se verifica,
+ * no se reintenta.
+ */
+export function UncertainAlert({ outcome }: { outcome: UncertainOutcome }) {
+  return (
+    <Alert>
+      <CircleHelp />
+      <AlertTitle>
+        Desenlace incierto{" "}
+        <span className="font-mono text-xs">{outcome.reason}</span>
+      </AlertTitle>
+      <AlertDescription>
+        <p>
+          {outcome.operation !== undefined && <code>{outcome.operation}</code>}
+          {outcome.confirmationId !== undefined && (
+            <>
+              {" "}
+              en <code>{outcome.confirmationId}</code>
+            </>
+          )}
+          {(outcome.operation ?? outcome.confirmationId) !== undefined && ": "}
+          {UNCERTAIN_ADVICE}
+        </p>
+        {outcome.tickets.length > 0 && (
+          <p>
+            Boletos que devolvió Sabre:{" "}
+            {outcome.tickets.map((ticket) => (
+              <code key={ticket.number} className="me-2">
+                {ticket.number}
+                {ticket.ticketStatusCode !== undefined &&
+                  ` ${ticket.ticketStatusCode}`}
+                {ticket.isCommitted === false && " (sin confirmar en el PNR)"}
+              </code>
+            ))}
+          </p>
+        )}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 function ErrorView({ error, name }: { error: StepError; name: string }) {
-  const { warnings, errors, ...fields } = error
+  const { warnings, errors, tickets, ...fields } = error
   return (
     <div className="flex flex-col gap-3">
       <Fields
@@ -444,6 +506,11 @@ function ErrorView({ error, name }: { error: StepError; name: string }) {
       {errors !== undefined && errors.length > 0 && (
         <Section title="errors">
           <Json value={errors} filename={`${name}.error.errors.json`} />
+        </Section>
+      )}
+      {tickets !== undefined && tickets.length > 0 && (
+        <Section title="tickets">
+          <Json value={tickets} filename={`${name}.error.tickets.json`} />
         </Section>
       )}
     </div>

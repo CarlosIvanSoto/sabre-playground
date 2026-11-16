@@ -1,7 +1,8 @@
 "use server"
 
 import { z } from "zod"
-import { FAKE_COMMAND_REASON, gateCommand } from "@/lib/host-command-policy"
+import { FAKE_COMMAND_REASON } from "@/lib/flows"
+import { gateCommand } from "@/lib/host-command-policy"
 import type { StepRun } from "@/lib/step/types"
 import { getEnvironment } from "@/server/config/environments"
 import { withRegisteredSession } from "@/server/sabre/sessions"
