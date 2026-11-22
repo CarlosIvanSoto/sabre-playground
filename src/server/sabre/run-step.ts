@@ -6,6 +6,7 @@ import type {
   SabreRawResponse,
   SabreRawResponseCallback,
 } from "sabre-client"
+import { maskCardNumbers } from "@/lib/redact"
 import type { LogLine, StepError, StepResult } from "@/lib/step/types"
 import { isSabreError } from "@/server/sabre/errors"
 import { captureLog } from "@/server/sabre/log"
@@ -96,6 +97,9 @@ export async function runStep<T>(
         ? undefined
         : {
             ...captured,
+            // La pestaña Crudo no recibe tarjetas: Sabre las devuelve completas en texto libre
+            // (TravelItineraryHistoryLLSRS, 2026-11-22).
+            body: maskCardNumbers(captured.body),
             headers: Object.fromEntries(captured.headers.entries()),
           },
     rawRequest:
@@ -103,6 +107,10 @@ export async function runStep<T>(
         ? undefined
         : {
             ...request,
+            body:
+              request.body === undefined
+                ? request.body
+                : maskCardNumbers(request.body),
             headers: Object.fromEntries(request.headers.entries()),
           },
     error,
