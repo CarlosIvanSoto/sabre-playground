@@ -1,7 +1,7 @@
-import type { ConsoleEnvironmentId } from "@/lib/environment"
-import { formatXml } from "@/lib/format-xml"
-import { createRedactor } from "@/lib/redact"
-import type { StepRun } from "@/lib/step/types"
+import type { ConsoleEnvironmentId } from "./environment.ts"
+import { formatXml } from "./format-xml.ts"
+import { createRedactor } from "./redact.ts"
+import type { StepRun } from "./step/types.ts"
 
 /**
  * "Copiar como hallazgo" (F6.1, #23): un paso de la consola como bloque Markdown, listo para
@@ -12,8 +12,9 @@ import type { StepRun } from "@/lib/step/types"
  * request crudo que mandó el SDK (`onRawRequest`, ADR-029), sin `Authorization` y con el SOAP
  * ya tapado. Auth no trae request crudo.
  *
- * Todo pasa por `redact.ts` (F6.2, #24): sin token ni datos personales, con localizador,
- * segmentos, tarifas y códigos de error tal cual.
+ * Todo pasa por `redact.ts` (F6.2, #24): sin token, datos personales ni de pago, con
+ * localizador, segmentos, tarifas y códigos de error tal cual. En XML, el texto libre
+ * (`<Text>`, la pantalla de host) sale enmascarado.
  *
  * Corre en el navegador, sobre lo que ya llegó al cliente.
  */
@@ -90,7 +91,7 @@ export function findingMarkdown(source: FindingSource): string {
     sent?.body === undefined || sent.body === ""
       ? undefined
       : redactor.body(sent.body)
-  const input = redactor.structure(source.input)
+  const structured = redactor.structure(source.input)
   const issues =
     step === undefined
       ? {}
@@ -101,6 +102,9 @@ export function findingMarkdown(source: FindingSource): string {
             ? {}
             : { errors: step.partialErrors }),
         }) as Record<string, unknown>)
+  // La entrada también pasa por las pasadas de texto: un comando de host puede traer la tarjeta.
+  const input =
+    structured === undefined ? undefined : redactor.value(structured)
   const at = source.at ?? new Date().toISOString()
   const day = at.slice(0, 10)
   const environment =
@@ -134,7 +138,7 @@ export function findingMarkdown(source: FindingSource): string {
     out.push(`- **Resultado**: ${outcome}`)
   }
   out.push(
-    "- **Fuente**: sabre-playground (datos personales y token redactados)"
+    "- **Fuente**: sabre-playground (token, datos personales y de pago redactados; texto libre enmascarado)"
   )
 
   out.push("", "**Request** (entrada del paso)", "")

@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TravelItineraryHistoryRS 2.4.0, respuesta SINTÉTICA. Tiene la misma estructura que una respuesta real de
+  producción del 2026-11-22, pero todos los valores sensibles se cambiaron por valores falsos:
+  - PAN 378282246310005: el número de prueba público de AMEX;
+  - nombres TESTER/UNO y SR PRUEBA;
+  - boleto 1390000000001;
+  - localizadores AAAAAA, BBBBBB y CCCCCC;
+  - PCC ZZZZ (agencia), YYYY (auth) y PLT (la aerolínea, tal como viene);
+  - sine XX.
+  Cada  ⚠ marca un dato que el playground debe tapar.
+-->
+<soap-env:Envelope xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap-env:Header>
+    <eb:MessageHeader xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" eb:version="1.0" soap-env:mustUnderstand="1">
+      <eb:From><eb:PartyId eb:type="URI"/></eb:From>
+      <eb:To><eb:PartyId eb:type="URI"/></eb:To>
+      <eb:CPAId>YYYY</eb:CPAId>                                   <!-- ⚠ PCC de auth -->
+      <eb:ConversationId>00000000-0000-0000-0000-000000000000</eb:ConversationId>
+      <eb:Service>TravelItineraryHistoryLLSRQ</eb:Service>
+      <eb:Action>TravelItineraryHistoryLLSRS</eb:Action>
+      <eb:MessageData>
+        <eb:MessageId>1000000000000000000</eb:MessageId>
+        <eb:Timestamp>2026-11-22T02:59:18</eb:Timestamp>
+        <eb:RefToMessageId>mid:00000000-0000-0000-0000-000000000000</eb:RefToMessageId>
+      </eb:MessageData>
+    </eb:MessageHeader>
+    <wsse:Security xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext">
+      <wsse:BinarySecurityToken valueType="String" EncodingType="wsse:Base64Binary">[REDACTED]</wsse:BinarySecurityToken>  <!-- este ya se tapa bien -->
+    </wsse:Security>
+  </soap-env:Header>
+  <soap-env:Body>
+    <TravelItineraryHistoryRS xmlns="http://webservices.sabre.com/sabreXML/2011/10" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:stl="http://services.sabre.com/STL/v01" Version="2.4.0">
+      <stl:ApplicationResults status="Complete">
+        <stl:Success timeStamp="2026-11-22T02:59:18Z"/>
+      </stl:ApplicationResults>
+
+      <!-- RPH 1 = lo más reciente. Action con prefijo X = borrado; A = alta; SC = cambio de horario de la aerolínea -->
+      <HistoricalInfo RPH="1">
+        <GeneralInfo Action="X3S">
+          <Text>SSR TKNE AM HK1 AMSMEX0026I19SEP/1390000000001C1</Text>   <!-- ⚠ boleto (13 dígitos) + cupón, dentro de texto libre -->
+        </GeneralInfo>
+        <GeneralInfo Action="X3S">
+          <Text>SSR TKNE AM HK1 MEXMTY0900I20SEP/1390000000001C2</Text>
+        </GeneralInfo>
+        <ItineraryInfo>
+          <ReservationItems>
+            <Item RPH="1">
+              <FlightSegment Action="XS" ArrivalDateTime="09-20T01:55" ConnectionInd="O" DepartureDateTime="09-19T22:00" FlightNumber="0026" NumberInParty="01" ResBookDesigCode="I" Status="HKNN" eTicket="true">
+                <DestinationLocation LocationCode="MEX"/>
+                <MarketingAirline Code="AM" FlightNumber="0026"/>
+                <OriginLocation LocationCode="AMS"/>
+                <SupplierRef ID="DCAM*CCCCCC"/>                       <!-- ⚠ localizador de la aerolínea tras DCAM* -->
+              </FlightSegment>
+              <FlightSegment Action="XS" ArrivalDateTime="10-12T21:45" ConnectionInd="O" DepartureDateTime="10-12T19:53" FlightNumber="0955" NumberInParty="01" ResBookDesigCode="N" Status="HXHK" eTicket="true">
+                <DestinationLocation LocationCode="MEX"/>
+                <MarketingAirline Code="AM" FlightNumber="0955"/>
+                <OriginLocation LocationCode="MTY"/>
+                <SupplierRef ID="DCAM*CCCCCC"/>
+              </FlightSegment>
+            </Item>
+            <Item RPH="2">
+              <Seats>
+                <Seat Action="X4G*" CustomerName="TESTER/UNO" Number="10D" Status="NNKK" Type="A">   <!-- ⚠ nombre del pasajero en atributo -->
+                  <FlightSegment DepartureDateTime="09-19" FlightNumber="0026" ResBookDesigCode="I">
+                    <DestinationLocation LocationCode="MEX"/>
+                    <MarketingAirline Code="AM" FlightNumber="0026"/>
+                    <OriginLocation LocationCode="AMS"/>
+                  </FlightSegment>
+                </Seat>
+              </Seats>
+            </Item>
+          </ReservationItems>
+        </ItineraryInfo>
+        <ItineraryRef>
+          <!-- ⚠ PCC de la agencia (AAA_PseudoCityCode, PseudoCityCode), sine del agente (CreationAgent) y ReceivedFrom (nombre libre, a veces el cliente) -->
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-09-17T12:19" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ" ReceivedFrom="P"/>
+        </ItineraryRef>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="2">
+        <GeneralInfo Action="AS">
+          <Text>OTH AA 11JAN GK/GK1  TRC/FELIZ VIAJE</Text>
+        </GeneralInfo>
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-09-17T12:18" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ" ReceivedFrom="P"/>
+        </ItineraryRef>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="3">
+        <GeneralInfo Action="A4O">
+          <Text>OSI 1S *** PREV TIME FOR AM  25N 12OCT MEXAMS 1030P  520P</Text>
+        </GeneralInfo>
+        <ItineraryInfo>
+          <ReservationItems>
+            <Item RPH="1">
+              <FlightSegment Action="SC" ArrivalDateTime="10-12T20:00" ConnectionInd="O" DepartureDateTime="10-12T18:10" FlightNumber="0949" NumberInParty="01" ResBookDesigCode="N" Status="TKTK" eTicket="true">
+                <DestinationLocation LocationCode="MEX"/>
+                <MarketingAirline Code="AM" FlightNumber="0949"/>
+                <OriginLocation LocationCode="MTY"/>
+                <SupplierRef ID="DCAM*CCCCCC"/>
+              </FlightSegment>
+            </Item>
+          </ReservationItems>
+        </ItineraryInfo>
+        <ItineraryRef>
+          <!-- cambio hecho por la aerolínea: ReceivedFrom trae un id interno de AM -->
+          <Source AAA_PseudoCityCode="PLT" CreateDateTime="2026-09-14T12:14" CreationAgent="AM" CreationAgentDutyCode="R" CreationAgentFunctionCode="M" PseudoCityCode="PLT" ReceivedFrom="MEXRMAM000000 00000000-001 ASC"/>
+        </ItineraryRef>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="4">
+        <GeneralInfo Action="AFF">
+          <Text>NNHKAMAM0000000000</Text>                         <!-- ⚠ número de viajero frecuente / referencia, en texto libre -->
+        </GeneralInfo>
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="PLT" CreateDateTime="2026-08-24T18:52" CreationAgent="AM" CreationAgentDutyCode="R" CreationAgentFunctionCode="M" PseudoCityCode="PLT" ReceivedFrom="MEXRMAM000000 00000000-001"/>
+        </ItineraryRef>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="7">
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-08-20T19:02" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ"/>
+        </ItineraryRef>
+        <InvoiceInfo>
+          <InvoiceNumber>0000001</InvoiceNumber>                  <!-- ⚠ factura de la agencia -->
+        </InvoiceInfo>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="8">
+        <AccountingInfo Action="AAC">
+          <Airline Code="AM"/>
+          <BaseFare Amount="10000"/>
+          <DocumentInfo>
+            <Document Number="0000000001"/>                       <!-- ⚠ boleto (sin prefijo de aerolínea) -->
+          </DocumentInfo>
+          <PaymentInfo>
+            <Commission Amount="100"/>
+            <FareApplication>ONE</FareApplication>
+            <Payment>
+              <CC_Info>
+                <PaymentCard Code="AX" Number="378282246310005"/>   <!-- ⚠⚠ PAN COMPLETO en atributo -->
+              </CC_Info>
+              <Form>CC</Form>
+            </Payment>
+          </PaymentInfo>
+          <PersonName NameNumber="1.1">TESTER</PersonName>         <!-- ⚠ apellido -->
+          <Taxes>
+            <GST Amount="0" TaxCode="D"/>
+            <QST Amount="100" TaxCode="D"/>
+            <Tax Amount="1000"/>
+          </Taxes>
+          <TicketingInfo>
+            <Exchange Ind="false"/>
+            <TarriffBasis>F</TarriffBasis>
+            <Ticketing ConjunctedCount="1"/>
+          </TicketingInfo>
+        </AccountingInfo>
+        <GeneralInfo Action="A3S">
+          <Text>SSR TKNE AM HK1 AMSMEX0026I19SEP/1390000000001C1</Text>
+        </GeneralInfo>
+        <GeneralInfo Action="A7">
+          <Text>T-20AUG-ZZZZ*AXX</Text>                          <!-- ⚠ PCC + sine en el campo de emisión -->
+        </GeneralInfo>
+        <GeneralInfo Action="AT">
+          <Text>WPQ1ETRDPEAAMKP1F*AX378282246310005/0228</Text>    <!-- ⚠⚠ PAN COMPLETO + vencimiento (MMAA) dentro de texto libre -->
+        </GeneralInfo>
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-08-20T13:32" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ"/>
+        </ItineraryRef>
+        <InvoiceInfo>
+          <InvoiceNumber>0000002</InvoiceNumber>
+        </InvoiceInfo>
+        <RemarkInfo>
+          <Remark Action="A5H">
+            <Text>H-AUTH-AMEX/AX0005/20AUG/00000000000000000000</Text>   <!-- ⚠ últimos 4 de la tarjeta + id de autorización -->
+          </Remark>
+          <Remark Action="A5H">
+            <Text>H-  AUTH-APV/000000/000/MXN11100</Text>                <!-- ⚠ código de aprobación + monto -->
+          </Remark>
+          <Remark Action="A5H">
+            <Text>H-  AUTH-CSC NOT SUPPLIED/</Text>
+          </Remark>
+        </RemarkInfo>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="9">
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-08-20T13:31" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ" ReceivedFrom="P"/>
+        </ItineraryRef>
+        <RemarkInfo>
+          <Remark Action="A5H">
+            <Text>H-SPLIT FR/000000/20AUG26 BBBBBB 02/02 01/01 TESTER UN</Text>   <!-- ⚠ localizador de la reserva hermana + nombre -->
+          </Remark>
+        </RemarkInfo>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="11">
+        <GeneralInfo Action="A3S">
+          <Text>SSR DOCS AM HK1/DB/01JAN1980/M/TESTER/UNO</Text>       <!-- ⚠⚠ fecha de nacimiento + sexo + nombre (APIS) -->
+        </GeneralInfo>
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-08-20T13:18" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ" ReceivedFrom="P"/>
+        </ItineraryRef>
+      </HistoricalInfo>
+
+      <HistoricalInfo RPH="12">
+        <GeneralInfo Action="AN">
+          <Text>1TESTER/UNO</Text>                                   <!-- ⚠ nombre (alta del nombre) -->
+        </GeneralInfo>
+        <GeneralInfo Action="ADT">
+          <Text>TADT</Text>
+        </GeneralInfo>
+        <ItineraryRef>
+          <Source AAA_PseudoCityCode="ZZZZ" CreateDateTime="2026-08-19T12:45" CreationAgent="XX" CreationAgentDutyCode="*" CreationAgentFunctionCode="A" PseudoCityCode="ZZZZ" ReceivedFrom="SR PRUEBA"/>   <!-- ⚠ nombre del cliente en ReceivedFrom -->
+        </ItineraryRef>
+      </HistoricalInfo>
+    </TravelItineraryHistoryRS>
+  </soap-env:Body>
+</soap-env:Envelope>
